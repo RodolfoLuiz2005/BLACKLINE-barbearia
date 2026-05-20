@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BLACKLINE • Barbearia Premium</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="bg-blur bg1"></div>
+<div class="bg-blur bg2"></div>
+
+<header>
+  <div class="nav">
+    <div class="logo">BLACK<span>LINE</span></div>
+    <div class="menu">
+      <a href="#servicos">Serviços</a>
+      <a href="#depoimentos">Depoimentos</a>
+      <a href="#localizacao">Localização</a>
+    </div>
+    <div class="nav-actions">
+      <a href="admin.html" class="btn-admin">⚙ Painel</a>
+      <button class="btn-nav" onclick="abrirModal()">Agendar</button>
+    </div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="hero-container">
+    <div class="hero-text">
+      <div class="tag">✦ Barbearia Premium em Recife</div>
+      <h1>Estilo, presença e <span>experiência premium</span>.</h1>
+      <p>Uma barbearia moderna criada para homens que valorizam aparência, atendimento exclusivo e um ambiente sofisticado. Cortes impecáveis, barba premium e experiência diferenciada.</p>
+      <div class="hero-buttons">
+        <button class="btn-primary" onclick="abrirModal()">Agendar Horário</button>
+        <a href="#servicos" class="btn-secondary">Conhecer Serviços</a>
+      </div>
+    </div>
+    <div class="hero-image">
+      <div class="glow"></div>
+      <img src="https://images.unsplash.com/photo-1622286342621-4bd786c2447c?q=80&w=1400&auto=format&fit=crop" alt="">
+    </div>
+  </div>
+</section>
+
+<section id="servicos">
+  <div class="container">
+    <div class="section-top reveal">
+      <span>SERVIÇOS PREMIUM</span>
+      <h2>Escolha sua experiência</h2>
+      <p>Clique no serviço desejado para visualizar preços e estilos disponíveis.</p>
+    </div>
+    <div class="services-grid">
+
+      <div class="service-card reveal">
+        <div class="service-header">
+          <div class="service-icon">✂️</div>
+          <div><h3>Corte Premium</h3><span class="service-sub">Cortes modernos e personalizados</span></div>
+        </div>
+        <button class="service-btn">Ver opções</button>
+        <div class="service-content">
+          <div class="price-box"><span>Valor</span><h4>R$ 45</h4></div>
+          <div class="cuts-list">
+            <div class="cut-item"><strong>Degradê</strong><span>Acabamento moderno e preciso</span></div>
+            <div class="cut-item"><strong>Low Fade</strong><span>Visual sofisticado e discreto</span></div>
+            <div class="cut-item"><strong>Mid Fade</strong><span>Equilíbrio perfeito e estiloso</span></div>
+            <div class="cut-item"><strong>High Fade</strong><span>Estilo agressivo e moderno</span></div>
+            <div class="cut-item"><strong>Buzz Cut</strong><span>Minimalista e elegante</span></div>
+            <div class="cut-item"><strong>Social Clássico</strong><span>Elegância premium tradicional</span></div>
+          </div>
+          <button class="agendar-servico-btn" onclick="abrirModal('Corte Premium')">📅 Agendar este serviço</button>
+        </div>
+      </div>
+
+      <div class="service-card reveal">
+        <div class="service-header">
+          <div class="service-icon">🧔</div>
+          <div><h3>Barba Completa</h3><span class="service-sub">Design e acabamento premium</span></div>
+        </div>
+        <button class="service-btn">Ver opções</button>
+        <div class="service-content">
+          <div class="price-box"><span>Valor</span><h4>R$ 35</h4></div>
+          <div class="cuts-list">
+            <div class="cut-item"><strong>Barba Desenhada</strong><span>Acabamento preciso e alinhado</span></div>
+            <div class="cut-item"><strong>Toalha Quente</strong><span>Experiência premium relaxante</span></div>
+            <div class="cut-item"><strong>Hidratação</strong><span>Tratamento especial para barba</span></div>
+          </div>
+          <button class="agendar-servico-btn" onclick="abrirModal('Barba Completa')">📅 Agendar este serviço</button>
+        </div>
+      </div>
+
+      <div class="service-card reveal">
+        <div class="service-header">
+          <div class="service-icon">🔥</div>
+          <div><h3>Combo Executivo</h3><span class="service-sub">Corte + barba + experiência VIP</span></div>
+        </div>
+        <button class="service-btn">Ver opções</button>
+        <div class="service-content">
+          <div class="price-box"><span>Valor</span><h4>R$ 75</h4></div>
+          <div class="cuts-list">
+            <div class="cut-item"><strong>Low Fade + Barba</strong><span>Visual premium sofisticado</span></div>
+            <div class="cut-item"><strong>Degradê + Barba</strong><span>Combo mais solicitado</span></div>
+            <div class="cut-item"><strong>Acabamento Navalhado</strong><span>Detalhes refinados e modernos</span></div>
+            <div class="cut-item"><strong>Bebida Premium</strong><span>Experiência diferenciada VIP</span></div>
+          </div>
+          <button class="agendar-servico-btn" onclick="abrirModal('Combo Executivo')">📅 Agendar este serviço</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section class="testimonials" id="depoimentos">
+  <div class="container">
+    <div class="section-top reveal">
+      <span>DEPOIMENTOS</span>
+      <h2>Clientes satisfeitos</h2>
+      <p>Quem passa pela BLACKLINE vive uma experiência diferenciada.</p>
+    </div>
+    <div class="testimonials-grid">
+      <div class="testimonial reveal">
+        <div class="stars">★★★★★</div>
+        <p>"A melhor barbearia que já fui. Atendimento impecável, ambiente sofisticado e corte perfeito."</p>
+        <div class="client">
+          <img src="https://randomuser.me/api/portraits/men/32.jpg">
+          <div><h4>Lucas Andrade</h4><span>Empresário</span></div>
+        </div>
+      </div>
+      <div class="testimonial reveal">
+        <div class="stars">★★★★★</div>
+        <p>"Experiência premium do começo ao fim. Dá para sentir o nível profissional em cada detalhe."</p>
+        <div class="client">
+          <img src="https://randomuser.me/api/portraits/men/45.jpg">
+          <div><h4>Rafael Costa</h4><span>Advogado</span></div>
+        </div>
+      </div>
+      <div class="testimonial reveal">
+        <div class="stars">★★★★★</div>
+        <p>"Ambiente elegante, atendimento diferenciado e resultado impecável. Recomendo muito."</p>
+        <div class="client">
+          <img src="https://randomuser.me/api/portraits/men/11.jpg">
+          <div><h4>Matheus Lima</h4><span>Designer</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="cta">
+  <div class="container">
+    <div class="cta-box reveal">
+      <div class="cta-text">
+        <h2>Agende seu horário agora</h2>
+        <p>Atendimento exclusivo, horários limitados e experiência premium. Clique abaixo e garanta seu horário.</p>
+      </div>
+      <button class="whatsapp-btn" onclick="abrirModal()">📅 Agendar Agora</button>
+    </div>
+  </div>
+</section>
+
+<section id="localizacao">
+  <div class="container">
+    <div class="section-top reveal">
+      <span>LOCALIZAÇÃO</span>
+      <h2>Venha nos visitar</h2>
+      <p>Ambiente moderno, confortável e pensado para sua melhor experiência.</p>
+    </div>
+    <div class="location-grid">
+      <div class="location-info reveal">
+        <h3>BLACKLINE Barber</h3>
+        <div class="location-item"><strong>Endereço</strong><span>Av. Boa Viagem, Recife - PE</span></div>
+        <div class="location-item"><strong>Horários</strong><span>Segunda a Sábado • 08h às 18h (Sáb até 12h)</span></div>
+        <div class="location-item"><strong>Contato</strong><span>(81) 99999-9999</span></div>
+      </div>
+      <div class="map reveal">
+        <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3949.889207546672!2d-34.8945!3d-8.1314!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x7ab1f0d4f7d6f9b%3A0x8d9c52d1bfa5c2!2sBoa%20Viagem!5e0!3m2!1spt-BR!2sbr!4v1700000000000"></iframe>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-content">
+    <p>© 2026 BLACKLINE Barber — Todos os direitos reservados.</p>
+    <div class="socials">
+      <a href="#">IG</a>
+      <a href="#">FB</a>
+      <a href="#">TT</a>
+    </div>
+  </div>
+</footer>
+
+<a href="https://wa.me/5581999999999" class="float-whats">💬</a>
+
+<!-- MODAL DE AGENDAMENTO -->
+<div class="modal-overlay" id="modalOverlay" onclick="fecharModalFora(event)">
+  <div class="modal" id="modal">
+    <button class="modal-close" onclick="fecharModal()">✕</button>
+
+    <div class="modal-header">
+      <div class="modal-icon">📅</div>
+      <h2>Agendar Horário</h2>
+      <p>Preencha os dados abaixo para garantir seu horário</p>
+    </div>
+
+    <div id="step-form">
+      <div class="form-grid">
+
+        <div class="form-group">
+          <label>Nome completo *</label>
+          <input type="text" id="inp-nome" placeholder="Seu nome" />
+        </div>
+
+        <div class="form-group">
+          <label>WhatsApp *</label>
+          <input type="tel" id="inp-telefone" placeholder="(81) 99999-9999" />
+        </div>
+
+        <div class="form-group form-full">
+          <label>Serviço *</label>
+          <div class="custom-select-wrap" id="select-servico-wrap">
+            <div class="custom-select-trigger" id="select-trigger" onclick="toggleSelect()">
+              <span id="select-label">Selecione um serviço...</span>
+              <svg class="select-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="custom-select-dropdown" id="select-dropdown">
+              <div class="select-option" data-value="" onclick="escolherServico(this)">
+                <span class="select-opt-icon">—</span>
+                <div><div class="select-opt-nome">Selecione...</div></div>
+              </div>
+              <div class="select-option" data-value="Corte Premium" onclick="escolherServico(this)">
+                <span class="select-opt-icon">✂️</span>
+                <div>
+                  <div class="select-opt-nome">Corte Premium</div>
+                  <div class="select-opt-desc">Degradê, Fade, Social e mais</div>
+                </div>
+                <span class="select-opt-preco">R$ 45</span>
+              </div>
+              <div class="select-option" data-value="Barba Completa" onclick="escolherServico(this)">
+                <span class="select-opt-icon">🧔</span>
+                <div>
+                  <div class="select-opt-nome">Barba Completa</div>
+                  <div class="select-opt-desc">Design, toalha quente e hidratação</div>
+                </div>
+                <span class="select-opt-preco">R$ 35</span>
+              </div>
+              <div class="select-option" data-value="Combo Executivo" onclick="escolherServico(this)">
+                <span class="select-opt-icon">🔥</span>
+                <div>
+                  <div class="select-opt-nome">Combo Executivo</div>
+                  <div class="select-opt-desc">Corte + barba + bebida premium VIP</div>
+                </div>
+                <span class="select-opt-preco">R$ 75</span>
+              </div>
+            </div>
+          </div>
+          <input type="hidden" id="inp-servico" />
+        </div>
+
+        <div class="form-group form-full">
+          <label>Data *</label>
+          <div class="cal-wrapper">
+            <div id="mini-calendario"></div>
+            <div class="cal-data-label" id="data-selecionada-label">Selecione uma data no calendário</div>
+          </div>
+        </div>
+
+        <div class="form-group form-full">
+          <label>Horário disponível *</label>
+          <div class="horarios-grid" id="horarios-grid">
+            <p class="horarios-hint">Selecione uma data primeiro</p>
+          </div>
+        </div>
+
+        <div class="form-group form-full">
+          <label>Observações</label>
+          <textarea id="inp-obs" placeholder="Alguma preferência de corte, estilo ou observação especial..."></textarea>
+        </div>
+
+      </div>
+
+      <div class="form-error" id="form-error"></div>
+
+      <button class="btn-agendar" id="btn-agendar" onclick="enviarAgendamento()">
+        <span id="btn-text">Confirmar Agendamento</span>
+        <span id="btn-loader" class="btn-loader" style="display:none">⏳</span>
+      </button>
+    </div>
+
+    <div id="step-sucesso" style="display:none">
+      <div class="sucesso-box">
+        <div class="sucesso-icon">✅</div>
+        <h3>Agendamento confirmado!</h3>
+        <p id="sucesso-texto"></p>
+        <div class="sucesso-detalhes" id="sucesso-detalhes"></div>
+        <button class="btn-agendar" onclick="fecharModal()" style="margin-top:25px">Fechar</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

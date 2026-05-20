@@ -1,0 +1,72 @@
+services:
+
+  # ================================
+  # BACKEND — API de Agendamentos
+  # ================================
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: blackline-api
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      DB_PATH: /app/data/agendamentos.db
+      NODE_ENV: development
+    volumes:
+      - agendamentos-data:/app/data
+      - ./backend/server.js:/app/server.js
+    networks:
+      - blackline-net
+    develop:
+      watch:
+        - action: sync
+          path: ./backend/server.js
+          target: /app/server.js
+        - action: rebuild
+          path: ./backend/package.json
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ================================
+  # FRONTEND — Nginx com proxy
+  # ================================
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: blackline-web
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - blackline-net
+    develop:
+      watch:
+        - action: sync
+          path: ./frontend
+          target: /usr/share/nginx/html
+
+# ================================
+# REDE interna entre containers
+# ================================
+networks:
+  blackline-net:
+    driver: bridge
+
+# ================================
+# VOLUME — Dados persistentes
+# ================================
+volumes:
+  agendamentos-data:
+    driver: local
+    name: blackline-agendamentos

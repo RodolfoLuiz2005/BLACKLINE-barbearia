@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BLACKLINE • Painel Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="admin.css"/>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-logo">BLACK<span>LINE</span></div>
+  <nav class="sidebar-nav">
+    <a href="admin.html" class="sidebar-link active">
+      <span>📋</span> Agendamentos
+    </a>
+    <a href="index.html" class="sidebar-link">
+      <span>🌐</span> Ver Site
+    </a>
+  </nav>
+  <div class="sidebar-bottom">
+    <div class="sidebar-pill">Painel Admin</div>
+  </div>
+</aside>
+
+<main class="main">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div>
+      <h1 class="page-title">Agendamentos</h1>
+      <p class="page-sub">Gerencie todos os horários da barbearia</p>
+    </div>
+    <button class="btn-refresh" onclick="carregarAgendamentos()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+      Atualizar
+    </button>
+  </div>
+
+  <!-- STAT CARDS -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-total">📋</div>
+      <div>
+        <div class="stat-num" id="stat-total">—</div>
+        <div class="stat-label">Total</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-pendente">🕐</div>
+      <div>
+        <div class="stat-num stat-c-pendente" id="stat-pendente">—</div>
+        <div class="stat-label">Pendentes</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-confirmado">✅</div>
+      <div>
+        <div class="stat-num stat-c-confirmado" id="stat-confirmado">—</div>
+        <div class="stat-label">Confirmados</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-concluido">🏆</div>
+      <div>
+        <div class="stat-num stat-c-concluido" id="stat-concluido">—</div>
+        <div class="stat-label">Concluídos</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-cancelado">❌</div>
+      <div>
+        <div class="stat-num stat-c-cancelado" id="stat-cancelado">—</div>
+        <div class="stat-label">Cancelados</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FILTROS -->
+  <div class="filter-bar">
+    <div class="filter-field">
+      <label>Status</label>
+      <div class="fselect-wrap">
+        <select id="filtro-status" onchange="aplicarFiltros()">
+          <option value="">Todos os status</option>
+          <option value="pendente">🕐 Pendente</option>
+          <option value="confirmado">✅ Confirmado</option>
+          <option value="concluido">🏆 Concluído</option>
+          <option value="cancelado">❌ Cancelado</option>
+        </select>
+        <svg class="fselect-chevron" width="13" height="13" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+      </div>
+    </div>
+    <div class="filter-field">
+      <label>Data</label>
+      <input type="date" id="filtro-data" onchange="aplicarFiltros()" class="finput"/>
+    </div>
+    <div class="filter-field filter-grow">
+      <label>Buscar</label>
+      <div class="fsearch-wrap">
+        <svg class="fsearch-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="filtro-busca" placeholder="Nome ou telefone..." oninput="aplicarFiltros()" class="finput finput-search"/>
+      </div>
+    </div>
+    <button class="btn-clear" onclick="limparFiltros()">Limpar filtros</button>
+  </div>
+
+  <!-- TABELA -->
+  <div class="table-card">
+    <div id="table-loading" class="table-state">
+      <div class="loading-spinner"></div>
+      <p>Carregando agendamentos...</p>
+    </div>
+    <div id="table-empty" class="table-state" style="display:none">
+      <div style="font-size:2.5rem;margin-bottom:14px">📭</div>
+      <p id="empty-msg">Nenhum agendamento encontrado.</p>
+    </div>
+    <div class="table-scroll" id="table-scroll" style="display:none">
+      <table class="ag-table" id="ag-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Cliente</th>
+            <th>Contato</th>
+            <th>Serviço</th>
+            <th>Data</th>
+            <th>Horário</th>
+            <th>Status</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="ag-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<!-- MODAL DETALHE -->
+<div class="overlay" id="detailOverlay" onclick="fecharDetalhe(event)">
+  <div class="dmodal">
+    <button class="dmodal-close" onclick="fecharDetalheBtn()">✕</button>
+    <h2 class="dmodal-title">Detalhes do Agendamento</h2>
+    <div id="detail-content"></div>
+    <div class="dmodal-actions" id="detail-actions"></div>
+  </div>
+</div>
+
+<script src="admin.js"></script>
+</body>
+</html>
