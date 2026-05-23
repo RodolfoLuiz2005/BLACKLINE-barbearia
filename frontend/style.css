@@ -127,7 +127,8 @@ header{
 .hero h1{ font-size:4.5rem; line-height:1.05; margin-bottom:25px; font-weight:900; }
 .hero h1 span{
     background:linear-gradient(to right,var(--gold),#fff);
-    -webkit-background-clip:text;
+    -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color:transparent;
 }
 .hero p{ color:var(--muted); font-size:1.1rem; line-height:1.8; max-width:580px; margin-bottom:40px; }

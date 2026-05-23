@@ -55,6 +55,8 @@ services:
         - action: sync
           path: ./frontend
           target: /usr/share/nginx/html
+        - action: rebuild
+          path: ./frontend/nginx.conf
 
 # ================================
 # REDE interna entre containers

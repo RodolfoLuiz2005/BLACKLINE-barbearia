@@ -328,7 +328,7 @@ async function enviarAgendamento() {
       <div class="detalhe"><span>Serviço</span><span>${ag.servico}</span></div>
       <div class="detalhe"><span>Data</span><span>${dataF}</span></div>
       <div class="detalhe"><span>Horário</span><span>${ag.horario}</span></div>
-      <div class="detalhe"><span>Status</span><span>✅ Confirmado</span></div>
+      <div class="detalhe"><span>Status</span><span>⏳ Pendente (aguardando confirmação)</span></div>
     `;
     document.getElementById('step-form').style.display   = 'none';
     document.getElementById('step-sucesso').style.display = 'block';
