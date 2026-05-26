@@ -1,3 +1,5 @@
 {
-    "root":"frontend"
+  "rewrites": [
+    { "source": "/admin", "destination": "/admin.html" }
+  ]
 }

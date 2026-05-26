@@ -1,35 +1,35 @@
 const express = require('express');
 const cors = require('cors');
-const Database = require('better-sqlite3');
+const fs = require('fs');
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'agendamentos.db');
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'agendamentos.json');
 
 // Ensure data directory exists
-const fs = require('fs');
 const dataDir = path.dirname(DB_PATH);
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-// Database setup
-const db = new Database(DB_PATH);
+// Inicializar banco de dados JSON
+let db = [];
+if (fs.existsSync(DB_PATH)) {
+  try {
+    const data = fs.readFileSync(DB_PATH, 'utf-8');
+    db = JSON.parse(data);
+  } catch (err) {
+    console.error('Erro ao ler o banco de dados:', err);
+    db = [];
+  }
+} else {
+  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+}
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS agendamentos (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome TEXT NOT NULL,
-    telefone TEXT NOT NULL,
-    servico TEXT NOT NULL,
-    data TEXT NOT NULL,
-    horario TEXT NOT NULL,
-    observacoes TEXT DEFAULT '',
-    status TEXT DEFAULT 'pendente',
-    criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-`);
+function saveDb() {
+  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+}
 
 // CORS — permite qualquer origem (necessário para dev local também)
 app.use(cors({
@@ -54,27 +54,24 @@ app.get('/health', (req, res) => {
 app.get('/api/agendamentos', (req, res) => {
   try {
     const { data, status } = req.query;
-    let query = 'SELECT * FROM agendamentos';
-    const params = [];
-    const conditions = [];
+    let results = [...db];
 
     if (data) {
-      conditions.push('data = ?');
-      params.push(data);
+      results = results.filter(a => a.data === data);
     }
     if (status) {
-      conditions.push('status = ?');
-      params.push(status);
+      results = results.filter(a => a.status === status);
     }
 
-    if (conditions.length > 0) {
-      query += ' WHERE ' + conditions.join(' AND ');
-    }
+    // Sort by data ASC, horario ASC
+    results.sort((a, b) => {
+      if (a.data === b.data) {
+        return a.horario.localeCompare(b.horario);
+      }
+      return a.data.localeCompare(b.data);
+    });
 
-    query += ' ORDER BY data ASC, horario ASC';
-
-    const rows = db.prepare(query).all(...params);
-    res.json({ success: true, data: rows });
+    res.json({ success: true, data: results });
   } catch (err) {
     console.error('ERRO:', err);
     res.status(500).json({ success: false, error: err.message });
@@ -84,7 +81,7 @@ app.get('/api/agendamentos', (req, res) => {
 // GET single agendamento
 app.get('/api/agendamentos/:id', (req, res) => {
   try {
-    const row = db.prepare('SELECT * FROM agendamentos WHERE id = ?').get(req.params.id);
+    const row = db.find(a => a.id === parseInt(req.params.id));
     if (!row) return res.status(404).json({ success: false, error: 'Agendamento não encontrado' });
     res.json({ success: true, data: row });
   } catch (err) {
@@ -106,9 +103,9 @@ app.post('/api/agendamentos', (req, res) => {
     }
 
     // Check for conflicting time slot
-    const conflict = db.prepare(
-      'SELECT id FROM agendamentos WHERE data = ? AND horario = ? AND status != ?'
-    ).get(data, horario, 'cancelado');
+    const conflict = db.find(
+      a => a.data === data && a.horario === horario && a.status !== 'cancelado'
+    );
 
     if (conflict) {
       return res.status(409).json({
@@ -117,13 +114,24 @@ app.post('/api/agendamentos', (req, res) => {
       });
     }
 
-    const result = db.prepare(`
-      INSERT INTO agendamentos (nome, telefone, servico, data, horario, observacoes)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(nome, telefone.replace(/\D/g, ''), servico, data, horario, observacoes || '');
+    const nextId = db.length > 0 ? Math.max(...db.map(a => a.id)) + 1 : 1;
+    
+    const novoAgendamento = {
+      id: nextId,
+      nome,
+      telefone: telefone.replace(/\D/g, ''),
+      servico,
+      data,
+      horario,
+      observacoes: observacoes || '',
+      status: 'pendente',
+      criado_em: new Date().toISOString()
+    };
 
-    const created = db.prepare('SELECT * FROM agendamentos WHERE id = ?').get(result.lastInsertRowid);
-    res.status(201).json({ success: true, data: created });
+    db.push(novoAgendamento);
+    saveDb();
+
+    res.status(201).json({ success: true, data: novoAgendamento });
   } catch (err) {
     console.error('ERRO:', err);
     res.status(500).json({ success: false, error: err.message });
@@ -140,16 +148,16 @@ app.patch('/api/agendamentos/:id', (req, res) => {
       return res.status(400).json({ success: false, error: 'Status inválido' });
     }
 
-    const result = db.prepare(
-      'UPDATE agendamentos SET status = ? WHERE id = ?'
-    ).run(status, req.params.id);
-
-    if (result.changes === 0) {
+    const index = db.findIndex(a => a.id === parseInt(req.params.id));
+    
+    if (index === -1) {
       return res.status(404).json({ success: false, error: 'Agendamento não encontrado' });
     }
 
-    const updated = db.prepare('SELECT * FROM agendamentos WHERE id = ?').get(req.params.id);
-    res.json({ success: true, data: updated });
+    db[index].status = status;
+    saveDb();
+
+    res.json({ success: true, data: db[index] });
   } catch (err) {
     console.error('ERRO:', err);
     res.status(500).json({ success: false, error: err.message });
@@ -159,10 +167,15 @@ app.patch('/api/agendamentos/:id', (req, res) => {
 // DELETE agendamento
 app.delete('/api/agendamentos/:id', (req, res) => {
   try {
-    const result = db.prepare('DELETE FROM agendamentos WHERE id = ?').run(req.params.id);
-    if (result.changes === 0) {
+    const index = db.findIndex(a => a.id === parseInt(req.params.id));
+    
+    if (index === -1) {
       return res.status(404).json({ success: false, error: 'Agendamento não encontrado' });
     }
+
+    db.splice(index, 1);
+    saveDb();
+
     res.json({ success: true, message: 'Agendamento removido' });
   } catch (err) {
     console.error('ERRO:', err);
@@ -188,9 +201,9 @@ app.get('/api/horarios-disponiveis', (req, res) => {
       todos.push(`${String(h).padStart(2, '0')}:30`);
     }
 
-    const ocupados = db.prepare(
-      "SELECT horario FROM agendamentos WHERE data = ? AND status != 'cancelado'"
-    ).all(data).map(r => r.horario);
+    const ocupados = db
+      .filter(a => a.data === data && a.status !== 'cancelado')
+      .map(a => a.horario);
 
     const disponiveis = todos.filter(h => !ocupados.includes(h));
     res.json({ success: true, data: disponiveis });
@@ -201,5 +214,5 @@ app.get('/api/horarios-disponiveis', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🔥 BLACKLINE API rodando na porta ${PORT}`);
+  console.log(`🔥 BLACKLINE API rodando na porta ${PORT} (JSON Storage)`);
 });

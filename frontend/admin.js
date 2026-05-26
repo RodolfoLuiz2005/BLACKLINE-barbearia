@@ -1,8 +1,21 @@
 /* ========================= */
-/* CONFIG                    */
+/* CONFIG FIREBASE           */
 /* ========================= */
 
-const API_URL = ''; // Nginx proxy: /api/* → backend
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
+import { getFirestore, collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyC_Z2RH2xQ6PLpcZ3o7PTib44jFZFnxets",
+  authDomain: "blackline-2c83c.firebaseapp.com",
+  projectId: "blackline-2c83c",
+  storageBucket: "blackline-2c83c.firebasestorage.app",
+  messagingSenderId: "1088625509451",
+  appId: "1:1088625509451:web:2a4f894d87c1537015b9ce"
+};
+
+const app = initializeApp(firebaseConfig);
+const firestoreDb = getFirestore(app);
 
 const STATUS = {
   pendente:   { label:'Pendente',   icon:'🕐', cls:'s-pendente'   },
@@ -34,17 +47,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function carregarAgendamentos() {
   const btn = document.querySelector('.btn-refresh');
-  if (btn) { btn.disabled = true; btn.querySelector('svg') && (btn.innerHTML = btn.innerHTML); }
+  if (btn) { btn.disabled = true; }
 
   try {
-    const res  = await fetch(`${API_URL}/api/agendamentos`);
-    const json = await res.json();
-    if (!json.success) throw new Error(json.error);
-    todos = json.data;
+    const q = query(collection(firestoreDb, "agendamentos"), orderBy("data", "asc"));
+    const querySnapshot = await getDocs(q);
+    todos = [];
+    querySnapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      todos.push({ id: docSnap.id, ...data });
+    });
+
+    // Ordenar por data e horario
+    todos.sort((a, b) => {
+      if (a.data === b.data) return (a.horario || '').localeCompare(b.horario || '');
+      return a.data.localeCompare(b.data);
+    });
+
     atualizarStats();
     aplicarFiltros();
   } catch(err) {
-    setEstado('erro', 'Não foi possível conectar à API. Verifique se o backend está rodando.');
+    console.error('Erro ao carregar:', err);
+    setEstado('erro', 'Não foi possível conectar ao Firebase. Verifique a configuração.');
   } finally {
     if (btn) { btn.disabled = false; }
   }
@@ -124,7 +148,7 @@ function renderTabela(lista) {
     const semF = d.toLocaleDateString('pt-BR', { weekday:'long' });
 
     // Tel formatado
-    const tel  = ag.telefone.replace(/\D/g,'');
+    const tel  = (ag.telefone || '').replace(/\D/g,'');
     const telF = tel.length === 11
       ? `(${tel.slice(0,2)}) ${tel.slice(2,7)}-${tel.slice(7)}`
       : tel.length === 10
@@ -133,10 +157,11 @@ function renderTabela(lista) {
 
     const sc  = SERVICO[ag.servico] || { icon:'📋', cls:'badge-corte' };
     const sta = STATUS[ag.status]   || STATUS.pendente;
+    const shortId = ag.id.slice(0, 6);
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td><span class="cell-id">#${ag.id}</span></td>
+      <td><span class="cell-id">#${shortId}</span></td>
       <td><div class="cell-nome">${ag.nome}</div></td>
       <td class="cell-tel">
         <a href="https://wa.me/55${tel}" target="_blank">
@@ -155,8 +180,8 @@ function renderTabela(lista) {
       <td><span class="badge-status ${sta.cls}">${sta.icon} ${sta.label}</span></td>
       <td>
         <div class="acoes">
-          <button class="btn-ver" onclick="abrirDetalhe(${ag.id})">Ver detalhes</button>
-          <button class="btn-del" onclick="deletar(${ag.id})" title="Remover">🗑</button>
+          <button class="btn-ver" onclick="abrirDetalhe('${ag.id}')">Ver detalhes</button>
+          <button class="btn-del" onclick="deletar('${ag.id}')" title="Remover">🗑</button>
         </div>
       </td>
     `;
@@ -179,14 +204,22 @@ function abrirDetalhe(id) {
   const dataF = d.toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
   const sta  = STATUS[ag.status] || STATUS.pendente;
   const sc   = SERVICO[ag.servico] || { icon:'📋' };
-  const tel  = ag.telefone.replace(/\D/g,'');
+  const tel  = (ag.telefone || '').replace(/\D/g,'');
   const telF = tel.length === 11
     ? `(${tel.slice(0,2)}) ${tel.slice(2,7)}-${tel.slice(7)}`
     : ag.telefone;
-  const criadoEm = new Date(ag.criado_em).toLocaleString('pt-BR');
+  
+  let criadoEm = '—';
+  if (ag.criado_em) {
+    // Firebase Timestamp tem .toDate(), string normal usa new Date()
+    const d2 = ag.criado_em.toDate ? ag.criado_em.toDate() : new Date(ag.criado_em);
+    criadoEm = d2.toLocaleString('pt-BR');
+  }
+
+  const shortId = id.slice(0, 6);
 
   document.getElementById('detail-content').innerHTML = `
-    <div class="drow"><span class="dkey">ID</span><span class="dval">#${ag.id}</span></div>
+    <div class="drow"><span class="dkey">ID</span><span class="dval">#${shortId}</span></div>
     <div class="drow"><span class="dkey">Nome</span><span class="dval">${ag.nome}</span></div>
     <div class="drow">
       <span class="dkey">WhatsApp</span>
@@ -207,7 +240,7 @@ function abrirDetalhe(id) {
   const outros = Object.keys(STATUS).filter(s => s !== ag.status);
   document.getElementById('detail-actions').innerHTML = outros.map(s => {
     const c = STATUS[s];
-    return `<button class="btn-status btn-status-${s}" onclick="atualizarStatus(${id},'${s}')">${c.icon} ${c.label}</button>`;
+    return `<button class="btn-status btn-status-${s}" onclick="atualizarStatus('${id}','${s}')">${c.icon} ${c.label}</button>`;
   }).join('');
 
   document.getElementById('detailOverlay').classList.add('open');
@@ -228,21 +261,17 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharDetalh
 
 async function atualizarStatus(id, novoStatus) {
   try {
-    const res  = await fetch(`${API_URL}/api/agendamentos/${id}`, {
-      method:'PATCH',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ status: novoStatus })
-    });
-    const json = await res.json();
-    if (!json.success) throw new Error(json.error);
+    const docRef = doc(firestoreDb, "agendamentos", id);
+    await updateDoc(docRef, { status: novoStatus });
 
     const idx = todos.findIndex(a => a.id === id);
-    if (idx !== -1) todos[idx] = json.data;
+    if (idx !== -1) todos[idx].status = novoStatus;
 
     atualizarStats();
     aplicarFiltros();
     fecharDetalheBtn();
   } catch(err) {
+    console.error('Erro ao atualizar:', err);
     alert('Erro ao atualizar: ' + err.message);
   }
 }
@@ -257,13 +286,25 @@ async function deletar(id) {
   if (!confirm(`Remover agendamento de ${ag.nome} (${ag.data} às ${ag.horario})?`)) return;
 
   try {
-    const res  = await fetch(`${API_URL}/api/agendamentos/${id}`, { method:'DELETE' });
-    const json = await res.json();
-    if (!json.success) throw new Error(json.error);
+    const docRef = doc(firestoreDb, "agendamentos", id);
+    await deleteDoc(docRef);
     todos = todos.filter(a => a.id !== id);
     atualizarStats();
     aplicarFiltros();
   } catch(err) {
+    console.error('Erro ao remover:', err);
     alert('Erro ao remover: ' + err.message);
   }
 }
+
+/* ========================= */
+/* EXPORT PARA GLOBAL SCOPE  */
+/* ========================= */
+window.carregarAgendamentos = carregarAgendamentos;
+window.aplicarFiltros = aplicarFiltros;
+window.limparFiltros = limparFiltros;
+window.abrirDetalhe = abrirDetalhe;
+window.fecharDetalhe = fecharDetalhe;
+window.fecharDetalheBtn = fecharDetalheBtn;
+window.atualizarStatus = atualizarStatus;
+window.deletar = deletar;

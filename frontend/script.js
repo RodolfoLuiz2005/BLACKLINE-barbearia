@@ -1,10 +1,22 @@
 /* ========================= */
-/* CONFIG                    */
+/* CONFIG FIREBASE           */
 /* ========================= */
 
-// Usa caminho relativo — o Nginx faz proxy de /api/* para o backend
-// Isso funciona em qualquer ambiente: localhost, IP, domínio, Docker
-const API_URL = '';
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyC_Z2RH2xQ6PLpcZ3o7PTib44jFZFnxets",
+  authDomain: "blackline-2c83c.firebaseapp.com",
+  projectId: "blackline-2c83c",
+  storageBucket: "blackline-2c83c.firebasestorage.app",
+  messagingSenderId: "1088625509451",
+  appId: "1:1088625509451:web:2a4f894d87c1537015b9ce"
+};
+
+const app = initializeApp(firebaseConfig);
+const firestoreDb = getFirestore(app);
+
 
 /* ========================= */
 /* REVEAL + HEADER           */
@@ -238,13 +250,18 @@ async function carregarHorarios(data) {
   let disponiveis = todosSlotsLocais;
 
   try {
-    const res  = await fetch(`${API_URL}/api/horarios-disponiveis?data=${data}`);
-    const json = await res.json();
-    if (json.success) {
-      // Intersecção: só slots dentro do horário do dia E não ocupados
-      disponiveis = todosSlotsLocais.filter(h => json.data.includes(h));
-    }
-  } catch { /* usa todos locais como fallback */ }
+    const q = query(collection(firestoreDb, "agendamentos"), where("data", "==", data));
+    const querySnapshot = await getDocs(q);
+    const ocupados = [];
+    querySnapshot.forEach((doc) => {
+      const agendamento = doc.data();
+      if (agendamento.status !== 'cancelado') {
+        ocupados.push(agendamento.horario);
+      }
+    });
+    
+    disponiveis = todosSlotsLocais.filter(h => !ocupados.includes(h));
+  } catch (err) { console.error('Erro ao buscar horários:', err); }
 
   if (disponiveis.length === 0) {
     grid.innerHTML = '<p class="horarios-hint">Nenhum horário disponível nesta data.</p>';
@@ -308,16 +325,18 @@ async function enviarAgendamento() {
   btnLoader.style.display = 'inline';
 
   try {
-    const res  = await fetch(`${API_URL}/api/agendamentos`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ nome, telefone: telefone.replace(/\D/g,''), servico, data, horario: horarioSelecionado, observacoes: obs })
+    const docRef = await addDoc(collection(firestoreDb, "agendamentos"), {
+      nome, 
+      telefone: telefone.replace(/\D/g,''), 
+      servico, 
+      data, 
+      horario: horarioSelecionado, 
+      observacoes: obs,
+      status: 'pendente',
+      criado_em: serverTimestamp()
     });
-    const json = await res.json();
 
-    if (!json.success) { mostrarErro(json.error || 'Erro ao agendar. Tente novamente.'); return; }
-
-    const ag   = json.data;
+    const ag = { nome, servico, data, horario: horarioSelecionado };
     const dataF = new Date(ag.data + 'T12:00:00').toLocaleDateString('pt-BR', {
       weekday:'long', day:'2-digit', month:'long', year:'numeric'
     });
@@ -346,3 +365,15 @@ function mostrarErro(msg) {
 }
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharModal(); });
+
+/* ========================= */
+/* EXPORT PARA GLOBAL SCOPE  */
+/* ========================= */
+window.toggleSelect = toggleSelect;
+window.escolherServico = escolherServico;
+window.mudarMes = mudarMes;
+window.selecionarDia = selecionarDia;
+window.abrirModal = abrirModal;
+window.fecharModal = fecharModal;
+window.fecharModalFora = fecharModalFora;
+window.enviarAgendamento = enviarAgendamento;
