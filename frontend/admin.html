@@ -8,8 +8,49 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="admin.css"/>
+<style>
+/* LOGIN OVERLAY */
+#login-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: #050505;
+  display: flex; align-items: center; justify-content: center;
+}
+#login-box {
+  background: #111; border: 1px solid #222; border-radius: 16px;
+  padding: 40px 36px; width: 100%; max-width: 360px;
+  display: flex; flex-direction: column; gap: 20px;
+}
+#login-box .login-logo { font-size: 1.5rem; font-weight: 900; letter-spacing: 2px; color: #fff; }
+#login-box .login-logo span { color: #c9a96e; }
+#login-box h2 { font-size: 1.1rem; color: #aaa; font-weight: 400; margin: 0; }
+#login-box input {
+  width: 100%; padding: 12px 16px; border-radius: 8px;
+  border: 1px solid #2a2a2a; background: #0a0a0a; color: #fff;
+  font-size: 1rem; font-family: inherit; outline: none; box-sizing: border-box;
+}
+#login-box input:focus { border-color: #c9a96e; }
+#login-box button {
+  width: 100%; padding: 13px; border-radius: 8px; border: none;
+  background: #c9a96e; color: #000; font-weight: 700;
+  font-size: 1rem; cursor: pointer; font-family: inherit;
+  transition: opacity .2s;
+}
+#login-box button:hover { opacity: .85; }
+#login-error { color: #ff6b6b; font-size: .85rem; text-align: center; min-height: 18px; }
+</style>
 </head>
 <body>
+
+<!-- LOGIN OVERLAY -->
+<div id="login-overlay">
+  <div id="login-box">
+    <div class="login-logo">BLACK<span>LINE</span></div>
+    <h2>Acesso restrito ao painel admin</h2>
+    <input type="password" id="login-senha" placeholder="Digite a senha" onkeydown="if(event.key==='Enter')tentarLogin()" autofocus/>
+    <button onclick="tentarLogin()">Entrar</button>
+    <div id="login-error"></div>
+  </div>
+</div>
 
 <aside class="sidebar">
   <div class="sidebar-logo">BLACK<span>LINE</span></div>
@@ -23,6 +64,7 @@
   </nav>
   <div class="sidebar-bottom">
     <div class="sidebar-pill">Painel Admin</div>
+    <button onclick="sair()" style="margin-top:10px;background:none;border:1px solid #333;color:#777;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:.8rem;width:100%">Sair</button>
   </div>
 </aside>
 
@@ -148,7 +190,6 @@
     <div class="dmodal-actions" id="detail-actions"></div>
   </div>
 </div>
-
 
 </body>
 

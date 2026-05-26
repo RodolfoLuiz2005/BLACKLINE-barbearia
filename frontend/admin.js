@@ -1,4 +1,42 @@
 /* ========================= */
+/* PROTEÇÃO DE ACESSO ADMIN  */
+/* ========================= */
+
+// Troque a senha abaixo pela senha que quiser usar
+const ADMIN_PASSWORD = 'blackline2025';
+const SESSION_KEY    = 'bl_admin_auth';
+
+function verificarAcesso() {
+  const autenticado = sessionStorage.getItem(SESSION_KEY) === 'ok';
+  if (autenticado) {
+    document.getElementById('login-overlay').style.display = 'none';
+  }
+}
+
+function tentarLogin() {
+  const senha = document.getElementById('login-senha').value;
+  const erro  = document.getElementById('login-error');
+  if (senha === ADMIN_PASSWORD) {
+    sessionStorage.setItem(SESSION_KEY, 'ok');
+    document.getElementById('login-overlay').style.display = 'none';
+    erro.textContent = '';
+    carregarAgendamentos();
+  } else {
+    erro.textContent = 'Senha incorreta. Tente novamente.';
+    document.getElementById('login-senha').value = '';
+    document.getElementById('login-senha').focus();
+  }
+}
+
+function sair() {
+  sessionStorage.removeItem(SESSION_KEY);
+  location.reload();
+}
+
+window.tentarLogin = tentarLogin;
+window.sair        = sair;
+
+/* ========================= */
 /* CONFIG FIREBASE           */
 /* ========================= */
 
@@ -36,9 +74,13 @@ let todos = [];
 /* INIT                      */
 /* ========================= */
 
-document.addEventListener('DOMContentLoaded', () => {
-  carregarAgendamentos();
-  setInterval(carregarAgendamentos, 30000);
+document.addEventListener("DOMContentLoaded", () => {
+  const autenticado = sessionStorage.getItem(SESSION_KEY) === 'ok';
+  if (autenticado) {
+    document.getElementById('login-overlay').style.display = 'none';
+    carregarAgendamentos();
+    setInterval(carregarAgendamentos, 30000);
+  }
 });
 
 /* ========================= */
