@@ -894,3 +894,46 @@ footer{ padding:40px 5%; border-top:1px solid rgba(255,255,255,.05); }
     white-space:nowrap;
     flex-shrink:0;
 }
+
+/* ========================= */
+/* VALIDAÇÃO — ESTILOS       */
+/* ========================= */
+
+.campo-erro input,
+.campo-erro textarea,
+input.campo-erro,
+textarea.campo-erro {
+    border-color: #ff6b6b !important;
+    box-shadow: 0 0 0 2px rgba(255, 107, 107, 0.18);
+}
+
+.campo-erro.cal-grid,
+#mini-calendario.campo-erro {
+    border: 1px solid #ff6b6b;
+    border-radius: 10px;
+}
+
+#horarios-grid.campo-erro {
+    border: 1px solid #ff6b6b;
+    border-radius: 10px;
+    padding: 4px;
+}
+
+#select-servico-wrap.campo-erro .select-trigger {
+    border-color: #ff6b6b !important;
+    box-shadow: 0 0 0 2px rgba(255, 107, 107, 0.18);
+}
+
+.field-error {
+    display: block;
+    color: #ff6b6b;
+    font-size: .8rem;
+    margin-top: 4px;
+    min-height: 16px;
+    animation: fadeInErr .2s ease;
+}
+
+@keyframes fadeInErr {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}

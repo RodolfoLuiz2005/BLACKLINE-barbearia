@@ -2,9 +2,18 @@
 /* PROTEÇÃO DE ACESSO ADMIN  */
 /* ========================= */
 
-// Troque a senha abaixo pela senha que quiser usar
-const ADMIN_PASSWORD = 'blackline2025';
-const SESSION_KEY    = 'bl_admin_auth';
+// ⚠️  Para trocar a senha:
+//   1. Abra o terminal e rode:  echo -n "SUA_NOVA_SENHA" | sha256sum
+//   2. Cole o hash resultante na constante abaixo (sem o "  -" no final)
+const ADMIN_PASSWORD_HASH = 'ecce7115fb2236a5c799a90b66577fa87de15fa0237876cdd289ff40025eae02'; // senha: blackline2025
+const SESSION_KEY         = 'bl_admin_auth';
+
+async function hashSenha(senha) {
+  const encoder = new TextEncoder();
+  const data    = encoder.encode(senha);
+  const buffer  = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 function verificarAcesso() {
   const autenticado = sessionStorage.getItem(SESSION_KEY) === 'ok';
@@ -13,20 +22,49 @@ function verificarAcesso() {
   }
 }
 
-function tentarLogin() {
-  const senha = document.getElementById('login-senha').value;
-  const erro  = document.getElementById('login-error');
-  if (senha === ADMIN_PASSWORD) {
-    sessionStorage.setItem(SESSION_KEY, 'ok');
-    document.getElementById('login-overlay').style.display = 'none';
-    erro.textContent = '';
-    carregarAgendamentos();
-  } else {
-    erro.textContent = 'Senha incorreta. Tente novamente.';
-    document.getElementById('login-senha').value = '';
-    document.getElementById('login-senha').focus();
+async function tentarLogin() {
+  const senhaInput = document.getElementById('login-senha');
+  const senha      = senhaInput.value;
+  const erro       = document.getElementById('login-error');
+  const btn        = document.getElementById('login-btn');
+
+  if (!senha) {
+    erro.textContent = 'Informe a senha.';
+    return;
+  }
+
+  btn.disabled     = true;
+  btn.textContent  = 'Verificando...';
+  erro.textContent = '';
+
+  try {
+    const hash = await hashSenha(senha);
+    if (hash === ADMIN_PASSWORD_HASH) {
+      sessionStorage.setItem(SESSION_KEY, 'ok');
+      document.getElementById('login-overlay').style.display = 'none';
+      carregarAgendamentos();
+    } else {
+      erro.textContent = 'Senha incorreta. Tente novamente.';
+      senhaInput.value = '';
+      senhaInput.focus();
+    }
+  } catch (e) {
+    erro.textContent = 'Erro ao verificar senha.';
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Entrar';
   }
 }
+
+// Permitir Enter no campo de senha
+document.addEventListener('DOMContentLoaded', () => {
+  const senhaInput = document.getElementById('login-senha');
+  if (senhaInput) {
+    senhaInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') tentarLogin();
+    });
+  }
+});
 
 function sair() {
   sessionStorage.removeItem(SESSION_KEY);
@@ -52,7 +90,7 @@ const firebaseConfig = {
   appId: "1:1088625509451:web:2a4f894d87c1537015b9ce"
 };
 
-const app = initializeApp(firebaseConfig);
+const app         = initializeApp(firebaseConfig);
 const firestoreDb = getFirestore(app);
 
 const STATUS = {
@@ -92,7 +130,7 @@ async function carregarAgendamentos() {
   if (btn) { btn.disabled = true; }
 
   try {
-    const q = query(collection(firestoreDb, "agendamentos"), orderBy("data", "asc"));
+    const q             = query(collection(firestoreDb, "agendamentos"), orderBy("data", "asc"));
     const querySnapshot = await getDocs(q);
     todos = [];
     querySnapshot.forEach((docSnap) => {
@@ -100,7 +138,6 @@ async function carregarAgendamentos() {
       todos.push({ id: docSnap.id, ...data });
     });
 
-    // Ordenar por data e horario
     todos.sort((a, b) => {
       if (a.data === b.data) return (a.horario || '').localeCompare(b.horario || '');
       return a.data.localeCompare(b.data);
@@ -184,12 +221,10 @@ function renderTabela(lista) {
   tbody.innerHTML = '';
 
   lista.forEach(ag => {
-    // Data
     const d    = new Date(ag.data + 'T12:00:00');
     const diaF = d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric' });
     const semF = d.toLocaleDateString('pt-BR', { weekday:'long' });
 
-    // Tel formatado
     const tel  = (ag.telefone || '').replace(/\D/g,'');
     const telF = tel.length === 11
       ? `(${tel.slice(0,2)}) ${tel.slice(2,7)}-${tel.slice(7)}`
@@ -197,8 +232,8 @@ function renderTabela(lista) {
       ? `(${tel.slice(0,2)}) ${tel.slice(2,6)}-${tel.slice(6)}`
       : ag.telefone;
 
-    const sc  = SERVICO[ag.servico] || { icon:'📋', cls:'badge-corte' };
-    const sta = STATUS[ag.status]   || STATUS.pendente;
+    const sc      = SERVICO[ag.servico] || { icon:'📋', cls:'badge-corte' };
+    const sta     = STATUS[ag.status]   || STATUS.pendente;
     const shortId = ag.id.slice(0, 6);
 
     const tr = document.createElement('tr');
@@ -242,18 +277,17 @@ function abrirDetalhe(id) {
   if (!ag) return;
   detalheId = id;
 
-  const d    = new Date(ag.data + 'T12:00:00');
+  const d     = new Date(ag.data + 'T12:00:00');
   const dataF = d.toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
-  const sta  = STATUS[ag.status] || STATUS.pendente;
-  const sc   = SERVICO[ag.servico] || { icon:'📋' };
-  const tel  = (ag.telefone || '').replace(/\D/g,'');
-  const telF = tel.length === 11
+  const sta   = STATUS[ag.status] || STATUS.pendente;
+  const sc    = SERVICO[ag.servico] || { icon:'📋' };
+  const tel   = (ag.telefone || '').replace(/\D/g,'');
+  const telF  = tel.length === 11
     ? `(${tel.slice(0,2)}) ${tel.slice(2,7)}-${tel.slice(7)}`
     : ag.telefone;
-  
+
   let criadoEm = '—';
   if (ag.criado_em) {
-    // Firebase Timestamp tem .toDate(), string normal usa new Date()
     const d2 = ag.criado_em.toDate ? ag.criado_em.toDate() : new Date(ag.criado_em);
     criadoEm = d2.toLocaleString('pt-BR');
   }
@@ -278,7 +312,6 @@ function abrirDetalhe(id) {
     ${ag.observacoes ? `<div class="dobs">💬 ${ag.observacoes}</div>` : ''}
   `;
 
-  // Botões de status
   const outros = Object.keys(STATUS).filter(s => s !== ag.status);
   document.getElementById('detail-actions').innerHTML = outros.map(s => {
     const c = STATUS[s];
@@ -343,10 +376,10 @@ async function deletar(id) {
 /* EXPORT PARA GLOBAL SCOPE  */
 /* ========================= */
 window.carregarAgendamentos = carregarAgendamentos;
-window.aplicarFiltros = aplicarFiltros;
-window.limparFiltros = limparFiltros;
-window.abrirDetalhe = abrirDetalhe;
-window.fecharDetalhe = fecharDetalhe;
-window.fecharDetalheBtn = fecharDetalheBtn;
-window.atualizarStatus = atualizarStatus;
-window.deletar = deletar;
+window.aplicarFiltros       = aplicarFiltros;
+window.limparFiltros        = limparFiltros;
+window.abrirDetalhe         = abrirDetalhe;
+window.fecharDetalhe        = fecharDetalhe;
+window.fecharDetalheBtn     = fecharDetalheBtn;
+window.atualizarStatus      = atualizarStatus;
+window.deletar              = deletar;
