@@ -1,6 +1,4 @@
-const API_BASE_URL = location.hostname === '127.0.0.1' || location.hostname === 'localhost'
-  ? 'http://localhost:3001'
-  : '';
+import { getBlacklineDb } from './firebase-config.js';
 
 const PUBLIC_CONFIG = {
   whatsapp: '5581999999999',
@@ -126,6 +124,224 @@ const FALLBACK_DATA = {
 
 const MESES = ['Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 const DIAS_SEMANA_CURTO = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+const AGENDAMENTOS_COLLECTION = 'agendamentos';
+const SERVICOS_COLLECTION = 'servicos';
+const PROFISSIONAIS_COLLECTION = 'profissionais';
+const PLANOS_COLLECTION = 'planos';
+const GALERIA_COLLECTION = 'galeria';
+const CONFIG_COLLECTION = 'configuracoes';
+const FIRESTORE_MODULE_URL = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+let firestoreApi;
+
+const DEFAULT_SCHEDULE = {
+  1: { ativo: true, inicio: '08:00', fim: '18:00', intervalo: 30 },
+  2: { ativo: true, inicio: '08:00', fim: '18:00', intervalo: 30 },
+  3: { ativo: true, inicio: '08:00', fim: '18:00', intervalo: 30 },
+  4: { ativo: true, inicio: '08:00', fim: '18:00', intervalo: 30 },
+  5: { ativo: true, inicio: '08:00', fim: '18:00', intervalo: 30 },
+  6: { ativo: true, inicio: '08:00', fim: '12:00', intervalo: 30 },
+  0: { ativo: false, inicio: '08:00', fim: '12:00', intervalo: 30 }
+};
+
+async function getFirestoreApi() {
+  if (!firestoreApi) firestoreApi = await import(FIRESTORE_MODULE_URL);
+  return firestoreApi;
+}
+
+function getSlotId(data, horario, profissionalId) {
+  return `${data}_${String(horario || '').replace(':', '-')}_${profissionalId}`;
+}
+
+function docToAgendamento(snapshot) {
+  return { id: snapshot.id, ...snapshot.data() };
+}
+
+function docToData(snapshot) {
+  return { id: snapshot.id, ...snapshot.data() };
+}
+
+function normalizeStatus(status) {
+  return status || 'pendente';
+}
+
+function timeToMinutes(value) {
+  const [h, m] = String(value || '').split(':').map(Number);
+  return (h * 60) + (m || 0);
+}
+
+function minutesToTime(value) {
+  const h = Math.floor(value / 60);
+  const m = value % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function slotsForDate(data, profissionalId = '') {
+  const date = new Date(`${data}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return [];
+
+  const profissional = state.profissionais.find(p => p.id === profissionalId) || state.profissionais.find(p => p.ativo !== false);
+  const schedule = profissional?.horariosAtendimento || profissional?.horarios || DEFAULT_SCHEDULE;
+  const cfg = schedule[date.getDay()] || DEFAULT_SCHEDULE[date.getDay()];
+  if (!cfg || cfg.ativo === false) return [];
+
+  const inicio = timeToMinutes(cfg.inicio || '08:00');
+  const fim = timeToMinutes(cfg.fim || '18:00');
+  const intervalo = Number(cfg.intervalo || 30);
+  const slots = [];
+  for (let current = inicio; current < fim; current += intervalo) {
+    slots.push(minutesToTime(current));
+  }
+  return slots;
+}
+
+async function buscarAgendamentosPorData(data) {
+  const db = await getBlacklineDb();
+  const { collection, getDocs, query, where } = await getFirestoreApi();
+  const snap = await getDocs(query(collection(db, AGENDAMENTOS_COLLECTION), where('data', '==', data)));
+  return snap.docs.map(docToAgendamento);
+}
+
+async function listarColecaoFirestore(collectionName) {
+  const db = await getBlacklineDb();
+  const { collection, getDocs } = await getFirestoreApi();
+  const snap = await getDocs(collection(db, collectionName));
+  return snap.docs.map(docToData);
+}
+
+async function carregarConfigFirestore() {
+  const db = await getBlacklineDb();
+  const { doc, getDoc } = await getFirestoreApi();
+  const snap = await getDoc(doc(db, CONFIG_COLLECTION, 'barbearia'));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : {};
+}
+
+async function criarAgendamentoFirestore(payload) {
+  const db = await getBlacklineDb();
+  const { doc, runTransaction, serverTimestamp } = await getFirestoreApi();
+  const slotId = getSlotId(payload.data, payload.horario, payload.profissionalId);
+  const ref = doc(db, AGENDAMENTOS_COLLECTION, slotId);
+  const codigo = `BL${Date.now().toString(36).slice(-6).toUpperCase()}`;
+
+  return runTransaction(db, async transaction => {
+    const current = await transaction.get(ref);
+    if (current.exists() && normalizeStatus(current.data().status) !== 'cancelado') {
+      throw new Error('Este horário acabou de ser reservado. Escolha outro horário.');
+    }
+
+    const agendamento = {
+      ...payload,
+      id: slotId,
+      codigo,
+      status: 'pendente',
+      criadoEm: serverTimestamp(),
+      atualizadoEm: serverTimestamp()
+    };
+    transaction.set(ref, agendamento);
+    return agendamento;
+  });
+}
+
+async function testeFirestore() {
+  try {
+    const db = await getBlacklineDb();
+    const { collection, doc, getDocs, serverTimestamp, setDoc } = await getFirestoreApi();
+    const agora = new Date();
+    const data = agora.toISOString().slice(0, 10);
+    const horario = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
+    const profissionalId = 'teste-firestore';
+    const slotId = getSlotId(data, horario, profissionalId);
+    const payload = {
+      nome: 'Cliente Teste Firestore',
+      telefone: '81999999999',
+      servico: 'Teste Firestore',
+      servicoId: 'teste-firestore',
+      profissionalId,
+      profissionalNome: 'Profissional Teste',
+      data,
+      horario,
+      observacoes: 'Agendamento criado pela funcao testeFirestore()',
+      status: 'pendente',
+      criadoEm: serverTimestamp(),
+      atualizadoEm: serverTimestamp()
+    };
+
+    console.log('Firebase conectado no cliente', { projectId: db.app.options.projectId });
+    console.log('Dados do agendamento antes de salvar', payload);
+    console.log('ID do documento criado', slotId);
+    await setDoc(doc(db, AGENDAMENTOS_COLLECTION, slotId), payload);
+
+    const snap = await getDocs(collection(db, AGENDAMENTOS_COLLECTION));
+    console.log('testeFirestore funcionou', {
+      documentoCriado: slotId,
+      totalAgendamentos: snap.size
+    });
+    return { ok: true, id: slotId, total: snap.size };
+  } catch (err) {
+    console.error('Erro completo ao testar Firestore no cliente:', err);
+    return { ok: false, erro: err };
+  }
+}
+
+async function consultarAgendamentoFirestore(telefone, codigo) {
+  const db = await getBlacklineDb();
+  const { collection, getDocs } = await getFirestoreApi();
+  const telefoneDigits = onlyDigits(telefone);
+  const codigoBusca = String(codigo || '').trim().toUpperCase();
+  const snap = await getDocs(collection(db, AGENDAMENTOS_COLLECTION));
+  const agendamento = snap.docs
+    .map(docToAgendamento)
+    .find(ag => onlyDigits(ag.telefone) === telefoneDigits && String(ag.codigo || '').toUpperCase() === codigoBusca);
+
+  if (!agendamento) throw new Error('Agendamento nao encontrado.');
+  return agendamento;
+}
+
+async function cancelarAgendamentoFirestore(id) {
+  const db = await getBlacklineDb();
+  const { doc, getDoc, serverTimestamp, updateDoc } = await getFirestoreApi();
+  const ref = doc(db, AGENDAMENTOS_COLLECTION, String(id));
+  await updateDoc(ref, { status: 'cancelado', atualizadoEm: serverTimestamp() });
+  const snap = await getDoc(ref);
+  return docToAgendamento(snap);
+}
+
+async function reagendarAgendamentoFirestore(agendamento, data, horario, profissionalId) {
+  const db = await getBlacklineDb();
+  const { doc, getDoc, runTransaction, serverTimestamp } = await getFirestoreApi();
+  const novoSlotId = getSlotId(data, horario, profissionalId);
+  const antigoRef = doc(db, AGENDAMENTOS_COLLECTION, String(agendamento.id));
+  const novoRef = doc(db, AGENDAMENTOS_COLLECTION, novoSlotId);
+  const profissionalNome = state.profissionais.find(p => p.id === profissionalId)?.nome || agendamento.profissionalNome || '';
+
+  await runTransaction(db, async transaction => {
+    const atual = await transaction.get(antigoRef);
+    if (!atual.exists()) throw new Error('Agendamento nao encontrado.');
+
+    if (novoSlotId !== String(agendamento.id)) {
+      const reservado = await transaction.get(novoRef);
+      if (reservado.exists() && normalizeStatus(reservado.data().status) !== 'cancelado') {
+        throw new Error('Este horário acabou de ser reservado. Escolha outro horário.');
+      }
+    }
+
+    const atualizado = {
+      ...atual.data(),
+      id: novoSlotId,
+      data,
+      horario,
+      profissionalId,
+      profissionalNome,
+      status: 'pendente',
+      atualizadoEm: serverTimestamp()
+    };
+
+    transaction.set(novoRef, atualizado);
+    if (novoSlotId !== String(agendamento.id)) transaction.delete(antigoRef);
+  });
+
+  const snap = await getDoc(novoRef);
+  return docToAgendamento(snap);
+}
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -134,30 +350,6 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
-}
-
-async function api(path, options = {}) {
-  try {
-    const headers = { ...(options.headers || {}) };
-    if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
-
-    const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
-    const text = await res.text();
-    const payload = text ? JSON.parse(text) : {};
-
-    if (!res.ok || payload.success === false) {
-      const error = new Error(payload.error || 'Erro de conexao. Tente novamente.');
-      error.status = res.status;
-      throw error;
-    }
-
-    return payload.data ?? payload;
-  } catch (err) {
-    if (err.status) throw err;
-    const error = new Error('Erro de conexao. Tente novamente.');
-    error.cause = err;
-    throw error;
-  }
 }
 
 function onlyDigits(value) {
@@ -310,11 +502,20 @@ function renderGaleria() {
   if (!grid) return;
   grid.innerHTML = state.galeria.map(item => `
     <article class="gallery-card reveal">
-      <img src="${escapeHtml(item.url)}" alt="${escapeHtml(item.titulo)}">
+      <img src="${escapeHtml(item.imagemUrl || item.url)}" alt="${escapeHtml(item.titulo)}">
       <div>${escapeHtml(item.titulo)}</div>
     </article>
   `).join('');
   initReveal();
+}
+
+function normalizeConfig(config = {}) {
+  return {
+    ...config,
+    mapaEmbed: config.mapaEmbed || config.googleMapsUrl || '',
+    googleReviewsUrl: config.googleReviewsUrl || config.googleReviewUrl || '',
+    horarioTexto: config.horarioTexto || config.horarioFuncionamento || ''
+  };
 }
 
 function renderPlanos() {
@@ -374,19 +575,20 @@ function setHref(id, value) {
 async function loadPublicData() {
   try {
     const [servicos, profissionais, planos, galeria, configuracoes] = await Promise.all([
-      api('/api/servicos'),
-      api('/api/profissionais'),
-      api('/api/planos'),
-      api('/api/galeria'),
-      api('/api/configuracoes')
+      listarColecaoFirestore(SERVICOS_COLLECTION),
+      listarColecaoFirestore(PROFISSIONAIS_COLLECTION),
+      listarColecaoFirestore(PLANOS_COLLECTION),
+      listarColecaoFirestore(GALERIA_COLLECTION),
+      carregarConfigFirestore()
     ]);
-    state.servicos = servicos.length ? servicos : FALLBACK_DATA.servicos;
-    state.profissionais = profissionais.length ? profissionais : FALLBACK_DATA.profissionais;
-    state.planos = planos.length ? planos : FALLBACK_DATA.planos;
-    state.galeria = galeria.length ? galeria : FALLBACK_DATA.galeria;
-    state.config = configuracoes || {};
+    state.servicos = servicos.filter(s => s.ativo !== false).length ? servicos.filter(s => s.ativo !== false) : FALLBACK_DATA.servicos;
+    state.profissionais = profissionais.filter(p => p.ativo !== false).length ? profissionais.filter(p => p.ativo !== false) : FALLBACK_DATA.profissionais;
+    state.planos = planos.filter(p => p.ativo !== false).length ? planos.filter(p => p.ativo !== false) : FALLBACK_DATA.planos;
+    state.galeria = galeria.filter(g => g.ativo !== false).length ? galeria.filter(g => g.ativo !== false) : FALLBACK_DATA.galeria;
+    state.config = normalizeConfig(configuracoes || {});
     state.apiOffline = false;
   } catch (err) {
+    console.error('Erro ao carregar dados publicos no Firestore:', err);
     state.servicos = FALLBACK_DATA.servicos;
     state.profissionais = FALLBACK_DATA.profissionais;
     state.planos = FALLBACK_DATA.planos;
@@ -470,12 +672,13 @@ function limparTodosErros() {
 }
 
 function validarTelefone(tel) {
-  return onlyDigits(tel).length === 11;
+  const digits = tel.replace(/\D/g, '');
+  return digits.length === 11;
 }
 
 function validarNome(nome) {
-  const partes = nome.trim().split(/\s+/).filter(Boolean);
-  return partes.length >= 2 && partes.every(parte => parte.length >= 2);
+  const partes = nome.trim().split(/\s+/);
+  return partes.length >= 2 && nome.trim().length >= 5;
 }
 
 function initCalendario() {
@@ -631,12 +834,24 @@ async function carregarHorarios(dataSelecionada = state.cal.dataISO) {
     return;
   }
 
+  if (!profissionalId) {
+    grid.innerHTML = '<p class="horarios-hint">Selecione um profissional primeiro</p>';
+    return;
+  }
+
   grid.innerHTML = '<p class="horario-loading">Carregando horários...</p>';
   try {
-    const horarios = await api(`/api/horarios-disponiveis?data=${encodeURIComponent(data)}`);
-    if (!Array.isArray(horarios)) throw new Error('Resposta invalida da API.');
+    const agendamentos = await buscarAgendamentosPorData(data);
+    const ocupados = new Set(
+      agendamentos
+        .filter(ag => ag.profissionalId === profissionalId && normalizeStatus(ag.status) !== 'cancelado')
+        .map(ag => ag.horario)
+        .filter(Boolean)
+    );
+    const horarios = slotsForDate(data, profissionalId).filter(horario => !ocupados.has(horario));
     renderHorarios(grid, horarios, horario => { state.horarioSelecionado = horario; });
   } catch (err) {
+    console.error('Erro ao carregar horarios no Firestore:', err);
     renderHorariosError(grid, () => carregarHorarios(data));
   }
 }
@@ -699,10 +914,11 @@ function mostrarErro(msg) {
 
 async function enviarAgendamento() {
   const nome = document.getElementById('inp-nome').value.trim();
-  const telefone = document.getElementById('inp-telefone').value.trim();
+  const telefone = onlyDigits(document.getElementById('inp-telefone').value);
   const servicoId = document.getElementById('inp-servico').value;
   const servico = state.servicos.find(s => s.id === servicoId)?.nome || servicoId;
   const profissionalId = document.getElementById('inp-profissional').value;
+  const profissionalNome = state.profissionais.find(p => p.id === profissionalId)?.nome || '';
   const data = state.cal.dataISO;
   const observacoes = document.getElementById('inp-obs').value.trim();
   limparTodosErros();
@@ -724,15 +940,23 @@ async function enviarAgendamento() {
   btnLoader.style.display = 'inline';
 
   try {
-    const ag = await api('/api/agendamentos', {
-      method: 'POST',
-      body: JSON.stringify({ nome, telefone, servico, data, horario: state.horarioSelecionado, observacoes })
+    const ag = await criarAgendamentoFirestore({
+      nome,
+      telefone,
+      servico,
+      servicoId,
+      profissionalId,
+      profissionalNome,
+      data,
+      horario: state.horarioSelecionado,
+      observacoes
     });
     renderSuccess(ag);
   } catch (err) {
-    const mensagem = err.status === 409 || err.message.includes('reservado')
+    console.error('Erro completo ao salvar agendamento no Firestore:', err);
+    const mensagem = err.message.includes('reservado')
       ? 'Este horário acabou de ser reservado. Escolha outro horário.'
-      : err.message;
+      : 'Nao foi possivel concluir o agendamento agora. Tente novamente.';
     mostrarErro(mensagem);
     if (data) carregarHorarios(data);
   } finally {
@@ -783,10 +1007,7 @@ async function consultarAgendamento() {
   const telefone = document.getElementById('manage-telefone').value;
   const codigo = document.getElementById('manage-codigo').value;
   try {
-    const ag = await api('/api/agendamentos/consultar', {
-      method: 'POST',
-      body: JSON.stringify({ telefone, codigo })
-    });
+    const ag = await consultarAgendamentoFirestore(telefone, codigo);
     state.manageAgendamento = ag;
     state.manageHorario = null;
     renderManageResult(ag);
@@ -817,13 +1038,7 @@ async function cancelarCliente() {
   if (!state.manageAgendamento) return;
   if (!confirm('Cancelar este agendamento?')) return;
   try {
-    const ag = await api(`/api/agendamentos/${state.manageAgendamento.id}/cancelar`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        telefone: document.getElementById('manage-telefone').value,
-        codigo: document.getElementById('manage-codigo').value
-      })
-    });
+    const ag = await cancelarAgendamentoFirestore(state.manageAgendamento.id);
     state.manageAgendamento = ag;
     renderManageResult(ag);
     document.getElementById('reschedule-box').style.display = 'none';
@@ -851,9 +1066,17 @@ async function carregarHorariosGerenciar() {
   }
   grid.innerHTML = '<p class="horario-loading">Carregando horarios...</p>';
   try {
-    const horarios = await api(`/api/horarios-disponiveis?data=${encodeURIComponent(data)}&profissionalId=${encodeURIComponent(profissionalId)}`);
+    const agendamentos = await buscarAgendamentosPorData(data);
+    const ocupados = new Set(
+      agendamentos
+        .filter(ag => ag.profissionalId === profissionalId && String(ag.id) !== String(state.manageAgendamento?.id) && normalizeStatus(ag.status) !== 'cancelado')
+        .map(ag => ag.horario)
+        .filter(Boolean)
+    );
+    const horarios = slotsForDate(data, profissionalId).filter(horario => !ocupados.has(horario));
     renderHorarios(grid, horarios, horario => { state.manageHorario = horario; });
   } catch (err) {
+    console.error('Erro ao carregar horarios de reagendamento no Firestore:', err);
     renderHorariosError(grid, carregarHorariosGerenciar);
   }
 }
@@ -867,16 +1090,7 @@ async function reagendarCliente() {
     return;
   }
   try {
-    const ag = await api(`/api/agendamentos/${state.manageAgendamento.id}/reagendar`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        telefone: document.getElementById('manage-telefone').value,
-        codigo: document.getElementById('manage-codigo').value,
-        data,
-        horario: state.manageHorario,
-        profissionalId
-      })
-    });
+    const ag = await reagendarAgendamentoFirestore(state.manageAgendamento, data, state.manageHorario, profissionalId);
     state.manageAgendamento = ag;
     renderManageResult(ag);
     document.getElementById('reschedule-box').style.display = 'none';
@@ -933,3 +1147,4 @@ window.consultarAgendamento = consultarAgendamento;
 window.cancelarCliente = cancelarCliente;
 window.abrirReagendamento = abrirReagendamento;
 window.reagendarCliente = reagendarCliente;
+window.testeFirestore = testeFirestore;

@@ -1,201 +1,360 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>BLACKLINE - Painel Admin</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="admin.css"/>
-</head>
-<body>
-
-<div id="login-overlay">
-  <div id="login-box">
-    <div class="login-logo">BLACK<span>LINE</span></div>
-    <h2>Acnel admin</h2>
-    <input type="password" id="login-senha" placeholder="Digite a senha" autofocus/>
-    <button id="login-btn" onclick="tentarLogin()">Entrar</button>
-    <div id="login-error"></div>
-    <p class="login-hint">A senha e o token ficam no backend. Configure <strong>ADMIN_PASSWORD</strong> no ambiente.</p>
-  </div>
-</div>
-
-<aside class="sidebar">
-  <div class="sidebar-logo">BLACK<span>LINE</span></div>
-  <nav class="sidebar-nav">
-    <button class="sidebar-link active" data-view="agenda" onclick="trocarView('agenda')"><span>AG</span> Agendamentos</button>
-    <button class="sidebar-link" data-view="servicos" onclick="trocarView('servicos')"><span>SV</span> Servi&ccedil;os</button>esso restrito ao pai
-    <button class="sidebar-link" data-view="profissionais" onclick="trocarView('profissionais')"><span>PF</span> Profissionais</button>
-    <button class="sidebar-link" data-view="galeria" onclick="trocarView('galeria')"><span>GL</span> Galeria</button>
-    <button class="sidebar-link" data-view="config" onclick="trocarView('config')"><span>CF</span> Configura&ccedil;&otilde;es</button>
-    <a href="index.html" class="sidebar-link"><span>ST</span> Ver Site</a>
-  </nav>
-  <div class="sidebar-bottom">
-    <div class="sidebar-pill">Painel Admin</div>
-    <button class="logout-btn" onclick="sair()">Sair</button>
-  </div>
-</aside>
-
-<main class="main">
-  <div class="topbar">
-    <div>
-      <h1 class="page-title" id="page-title">Agendamentos</h1>
-      <p class="page-sub" id="page-sub">Gerencie horarios, servicos, equipe e configuracoes.</p>
-    </div>
-    <button class="btn-refresh" onclick="carregarTudo()">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-      Atualizar
-    </button>
-  </div>
-
-  <section id="view-agenda" class="admin-view active">
-    <div class="stats-grid">
-      <div class="stat-card"><div class="stat-icon stat-icon-total">AG</div><div><div class="stat-num" id="stat-total">-</div><div class="stat-label">Total</div></div></div>
-      <div class="stat-card"><div class="stat-icon stat-icon-pendente">PD</div><div><div class="stat-num stat-c-pendente" id="stat-pendente">-</div><div class="stat-label">Pendentes</div></div></div>
-      <div class="stat-card"><div class="stat-icon stat-icon-confirmado">OK</div><div><div class="stat-num stat-c-confirmado" id="stat-confirmado">-</div><div class="stat-label">Confirmados</div></div></div>
-      <div class="stat-card"><div class="stat-icon stat-icon-concluido">FN</div><div><div class="stat-num stat-c-concluido" id="stat-concluido">-</div><div class="stat-label">Concluidos</div></div></div>
-      <div class="stat-card"><div class="stat-icon stat-icon-cancelado">CX</div><div><div class="stat-num stat-c-cancelado" id="stat-cancelado">-</div><div class="stat-label">Cancelados</div></div></div>
-    </div>
-
-    <div class="filter-bar">
-      <div class="filter-field">
-        <label>Status</label>
-        <select id="filtro-status" onchange="aplicarFiltros()" class="finput">
-          <option value="">Todos</option>
-          <option value="pendente">Pendente</option>
-          <option value="confirmado">Confirmado</option>
-          <option value="concluido">Concluido</option>
-          <option value="cancelado">Cancelado</option>
-        </select>
-      </div>
-      <div class="filter-field">
-        <label>Profissional</label>
-        <select id="filtro-profissional" onchange="aplicarFiltros()" class="finput"></select>
-      </div>
-      <div class="filter-field">
-        <label>Data</label>
-        <input type="date" id="filtro-data" onchange="aplicarFiltros()" class="finput"/>
-      </div>
-      <div class="filter-field filter-grow">
-        <label>Buscar</label>
-        <input type="text" id="filtro-busca" placeholder="Nome ou telefone..." oninput="aplicarFiltros()" class="finput"/>
-      </div>
-      <button class="btn-clear" onclick="limparFiltros()">Limpar filtros</button>
-    </div>
-
-    <div class="table-card">
-      <div id="table-loading" class="table-state"><div class="loading-spinner"></div><p>Carregando agendamentos...</p></div>
-      <div id="table-empty" class="table-state" style="display:none"><p id="empty-msg">Nenhum agendamento encontrado.</p></div>
-      <div class="table-scroll" id="table-scroll" style="display:none">
-        <table class="ag-table">
-          <thead>
-            <tr>
-              <th>Codigo</th>
-              <th>Cliente</th>
-              <th>Contato</th>
-              <th>Servico</th>
-              <th>Profissional</th>
-              <th>Data</th>
-              <th>Horario</th>
-              <th>Status</th>
-              <th>Acoes</th>
-            </tr>
-          </thead>
-          <tbody id="ag-tbody"></tbody>
-        </table>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BLACKLINE - Painel Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="admin.css" />
+  </head>
+  <body>
+    <div id="login-overlay">
+      <div id="login-box">
+        <div class="login-logo">BLACK<span>LINE</span></div>
+        <h2>Painel admin</h2>
+        <input
+          type="password"
+          id="login-senha"
+          placeholder="Digite a senha"
+          autofocus
+        />
+        <button id="login-btn" onclick="tentarLogin()">Entrar</button>
+        <div id="login-error"></div>
+        <p class="login-hint">
+          Modo teste local. Para producao, proteja o acesso com autenticacao
+          segura.
+        </p>
       </div>
     </div>
-  </section>
 
-  <section id="view-servicos" class="admin-view">
-    <div class="editor-grid">
-      <form class="editor-card" onsubmit="salvarServico(event)">
-        <h2 id="servico-form-title">Novo servico</h2>
-        <input type="hidden" id="servico-id"/>
-        <label>Nome<input id="servico-nome" required></label>
-        <label>Descricao<textarea id="servico-descricao"></textarea></label>
-        <div class="two-cols">
-          <label>Preco<input id="servico-preco" type="number" min="0" step="0.01" required></label>
-          <label>Duracao (min)<input id="servico-duracao" type="number" min="15" step="5" required></label>
+    <aside class="sidebar">
+      <div class="sidebar-logo">BLACK<span>LINE</span></div>
+      <nav class="sidebar-nav">
+        <button
+          class="sidebar-link active"
+          data-view="agenda"
+          onclick="trocarView('agenda')"
+        >
+          <span>AG</span> Agendamentos
+        </button>
+        <button
+          class="sidebar-link"
+          data-view="servicos"
+          onclick="trocarView('servicos')"
+        >
+          <span>SV</span> Servi&ccedil;os
+        </button>
+        <button
+          class="sidebar-link"
+          data-view="profissionais"
+          onclick="trocarView('profissionais')"
+        >
+          <span>PF</span> Profissionais
+        </button>
+        <button
+          class="sidebar-link"
+          data-view="galeria"
+          onclick="trocarView('galeria')"
+        >
+          <span>GL</span> Galeria
+        </button>
+        <button
+          class="sidebar-link"
+          data-view="config"
+          onclick="trocarView('config')"
+        >
+          <span>CF</span> Configura&ccedil;&otilde;es
+        </button>
+        <a href="index.html" class="sidebar-link"><span>ST</span> Ver Site</a>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="sidebar-pill">Painel Admin</div>
+        <button class="logout-btn" onclick="sair()">Sair</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div>
+          <h1 class="page-title" id="page-title">Agendamentos</h1>
+          <p class="page-sub" id="page-sub">
+            Gerencie horarios, servicos, equipe e configuracoes.
+          </p>
         </div>
-        <label>Categoria<input id="servico-categoria"></label>
-        <label>Opcoes (uma por linha)<textarea id="servico-opcoes"></textarea></label>
-        <label class="check-line"><input id="servico-ativo" type="checkbox" checked> Ativo</label>
-        <button class="btn-save" type="submit">Salvar servico</button>
-        <button class="btn-clear" type="button" onclick="resetServicoForm()">Limpar</button>
-      </form>
-      <div class="list-card" id="servicos-list"></div>
-    </div>
-  </section>
-
-  <section id="view-profissionais" class="admin-view">
-    <div class="editor-grid">
-      <form class="editor-card" onsubmit="salvarProfissional(event)">
-        <h2 id="prof-form-title">Novo profissional</h2>
-        <input type="hidden" id="prof-id"/>
-        <label>Nome<input id="prof-nome" required></label>
-        <label>Foto ou avatar URL<input id="prof-foto"></label>
-        <label>Especialidade<input id="prof-especialidade" required></label>
-        <label>Agenda semanal<textarea id="prof-horarios" placeholder='JSON de horarios'></textarea></label>
-        <label class="check-line"><input id="prof-ativo" type="checkbox" checked> Ativo</label>
-        <button class="btn-save" type="submit">Salvar profissional</button>
-        <button class="btn-clear" type="button" onclick="resetProfForm()">Limpar</button>
-      </form>
-      <div class="list-card" id="prof-list"></div>
-    </div>
-  </section>
-
-  <section id="view-galeria" class="admin-view">
-    <div class="editor-grid">
-      <form class="editor-card" onsubmit="salvarGaleria(event)">
-        <h2 id="gal-form-title">Nova imagem</h2>
-        <input type="hidden" id="gal-id"/>
-        <label>Titulo<input id="gal-titulo" required></label>
-        <label>URL da imagem<input id="gal-url" required></label>
-        <label class="check-line"><input id="gal-ativo" type="checkbox" checked> Ativa</label>
-        <button class="btn-save" type="submit">Salvar imagem</button>
-        <button class="btn-clear" type="button" onclick="resetGalForm()">Limpar</button>
-      </form>
-      <div class="list-card" id="gal-list"></div>
-    </div>
-  </section>
-
-  <section id="view-config" class="admin-view">
-    <form class="editor-card wide" onsubmit="salvarConfig(event)">
-      <h2>Configuracoes do site</h2>
-      <div class="two-cols">
-        <label>Instagram<input id="cfg-instagram"></label>
-        <label>WhatsApp com DDI<input id="cfg-whatsapp"></label>
+        <button class="btn-refresh" onclick="carregarTudo()">
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="23 4 23 10 17 10" />
+            <polyline points="1 20 1 14 7 14" />
+            <path
+              d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"
+            />
+          </svg>
+          Atualizar
+        </button>
       </div>
-      <div class="two-cols">
-        <label>Facebook<input id="cfg-facebook"></label>
-        <label>TikTok<input id="cfg-tiktok"></label>
-      </div>
-      <label>Endereco<input id="cfg-endereco"></label>
-      <label>Iframe/link embed do Google Maps<input id="cfg-mapa"></label>
-      <div class="two-cols">
-        <label>Link para avaliar no Google<input id="cfg-google-url"></label>
-        <label>Nota exibida<input id="cfg-google-rating"></label>
-      </div>
-      <label>Horario exibido<input id="cfg-horario"></label>
-      <label>Planos JSON<textarea id="cfg-planos"></textarea></label>
-      <button class="btn-save" type="submit">Salvar configuracoes</button>
-      <p class="editor-note">WhatsApp automatico real exige integracao externa como API oficial, Z-API, Twilio ou Evolution API. Este painel prepara mensagens prontas em link.</p>
-    </form>
-  </section>
-</main>
 
-<div class="overlay" id="detailOverlay" onclick="fecharDetalhe(event)">
-  <div class="dmodal">
-    <button class="dmodal-close" onclick="fecharDetalheBtn()">x</button>
-    <h2 class="dmodal-title">Detalhes do Agendamento</h2>
-    <div id="detail-content"></div>
-    <div class="dmodal-actions" id="detail-actions"></div>
-  </div>
-</div>
+      <section id="view-agenda" class="admin-view active">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon stat-icon-total">AG</div>
+            <div>
+              <div class="stat-num" id="stat-total">-</div>
+              <div class="stat-label">Total</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon stat-icon-pendente">PD</div>
+            <div>
+              <div class="stat-num stat-c-pendente" id="stat-pendente">-</div>
+              <div class="stat-label">Pendentes</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon stat-icon-confirmado">OK</div>
+            <div>
+              <div class="stat-num stat-c-confirmado" id="stat-confirmado">
+                -
+              </div>
+              <div class="stat-label">Confirmados</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon stat-icon-concluido">FN</div>
+            <div>
+              <div class="stat-num stat-c-concluido" id="stat-concluido">-</div>
+              <div class="stat-label">Concluidos</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon stat-icon-cancelado">CX</div>
+            <div>
+              <div class="stat-num stat-c-cancelado" id="stat-cancelado">-</div>
+              <div class="stat-label">Cancelados</div>
+            </div>
+          </div>
+        </div>
 
-</body>
-<script type="module" src="admin.js"></script>
+        <div class="filter-bar">
+          <div class="filter-field">
+            <label>Status</label>
+            <select
+              id="filtro-status"
+              onchange="aplicarFiltros()"
+              class="finput"
+            >
+              <option value="">Todos</option>
+              <option value="pendente">Pendente</option>
+              <option value="confirmado">Confirmado</option>
+              <option value="concluido">Concluido</option>
+              <option value="cancelado">Cancelado</option>
+            </select>
+          </div>
+          <div class="filter-field">
+            <label>Profissional</label>
+            <select
+              id="filtro-profissional"
+              onchange="aplicarFiltros()"
+              class="finput"
+            ></select>
+          </div>
+          <div class="filter-field">
+            <label>Data</label>
+            <input
+              type="date"
+              id="filtro-data"
+              onchange="aplicarFiltros()"
+              class="finput"
+            />
+          </div>
+          <div class="filter-field filter-grow">
+            <label>Buscar</label>
+            <input
+              type="text"
+              id="filtro-busca"
+              placeholder="Nome ou telefone..."
+              oninput="aplicarFiltros()"
+              class="finput"
+            />
+          </div>
+          <button class="btn-clear" onclick="limparFiltros()">
+            Limpar filtros
+          </button>
+        </div>
+
+        <div class="table-card">
+          <div id="table-loading" class="table-state">
+            <div class="loading-spinner"></div>
+            <p>Carregando agendamentos...</p>
+          </div>
+          <div id="table-empty" class="table-state" style="display: none">
+            <p id="empty-msg">Nenhum agendamento encontrado.</p>
+          </div>
+          <div class="table-scroll" id="table-scroll" style="display: none">
+            <table class="ag-table">
+              <thead>
+                <tr>
+                  <th>Codigo</th>
+                  <th>Cliente</th>
+                  <th>Contato</th>
+                  <th>Servico</th>
+                  <th>Profissional</th>
+                  <th>Data</th>
+                  <th>Horario</th>
+                  <th>Status</th>
+                  <th>Acoes</th>
+                </tr>
+              </thead>
+              <tbody id="ag-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-servicos" class="admin-view">
+        <div class="editor-grid">
+          <form class="editor-card" onsubmit="salvarServico(event)">
+            <h2 id="servico-form-title">Novo servico</h2>
+            <input type="hidden" id="servico-id" />
+            <label>Nome<input id="servico-nome" required /></label>
+            <label>Descricao<textarea id="servico-descricao"></textarea></label>
+            <div class="two-cols">
+              <label
+                >Preco<input
+                  id="servico-preco"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  required
+              /></label>
+              <label
+                >Duracao (min)<input
+                  id="servico-duracao"
+                  type="number"
+                  min="15"
+                  step="5"
+                  required
+              /></label>
+            </div>
+            <label>Categoria<input id="servico-categoria" /></label>
+            <label
+              >Opcoes (uma por linha)<textarea id="servico-opcoes"></textarea>
+            </label>
+            <label class="check-line"
+              ><input id="servico-ativo" type="checkbox" checked /> Ativo</label
+            >
+            <button class="btn-save" type="submit">Salvar servico</button>
+            <button
+              class="btn-clear"
+              type="button"
+              onclick="resetServicoForm()"
+            >
+              Limpar
+            </button>
+          </form>
+          <div class="list-card" id="servicos-list"></div>
+        </div>
+      </section>
+
+      <section id="view-profissionais" class="admin-view">
+        <div class="editor-grid">
+          <form class="editor-card" onsubmit="salvarProfissional(event)">
+            <h2 id="prof-form-title">Novo profissional</h2>
+            <input type="hidden" id="prof-id" />
+            <label>Nome<input id="prof-nome" required /></label>
+            <label>Foto ou avatar URL<input id="prof-foto" /></label>
+            <label
+              >Especialidade<input id="prof-especialidade" required
+            /></label>
+            <label
+              >Agenda semanal<textarea
+                id="prof-horarios"
+                placeholder="JSON de horarios"
+              ></textarea>
+            </label>
+            <label class="check-line"
+              ><input id="prof-ativo" type="checkbox" checked /> Ativo</label
+            >
+            <button class="btn-save" type="submit">Salvar profissional</button>
+            <button class="btn-clear" type="button" onclick="resetProfForm()">
+              Limpar
+            </button>
+          </form>
+          <div class="list-card" id="prof-list"></div>
+        </div>
+      </section>
+
+      <section id="view-galeria" class="admin-view">
+        <div class="editor-grid">
+          <form class="editor-card" onsubmit="salvarGaleria(event)">
+            <h2 id="gal-form-title">Nova imagem</h2>
+            <input type="hidden" id="gal-id" />
+            <label>Titulo<input id="gal-titulo" required /></label>
+            <label>URL da imagem<input id="gal-url" required /></label>
+            <label class="check-line"
+              ><input id="gal-ativo" type="checkbox" checked /> Ativa</label
+            >
+            <button class="btn-save" type="submit">Salvar imagem</button>
+            <button class="btn-clear" type="button" onclick="resetGalForm()">
+              Limpar
+            </button>
+          </form>
+          <div class="list-card" id="gal-list"></div>
+        </div>
+      </section>
+
+      <section id="view-config" class="admin-view">
+        <form class="editor-card wide" onsubmit="salvarConfig(event)">
+          <h2>Configuracoes do site</h2>
+          <div class="two-cols">
+            <label>Instagram<input id="cfg-instagram" /></label>
+            <label>WhatsApp com DDI<input id="cfg-whatsapp" /></label>
+          </div>
+          <div class="two-cols">
+            <label>Facebook<input id="cfg-facebook" /></label>
+            <label>TikTok<input id="cfg-tiktok" /></label>
+          </div>
+          <label>Endereco<input id="cfg-endereco" /></label>
+          <label>Iframe/link embed do Google Maps<input id="cfg-mapa" /></label>
+          <div class="two-cols">
+            <label
+              >Link para avaliar no Google<input id="cfg-google-url"
+            /></label>
+            <label>Nota exibida<input id="cfg-google-rating" /></label>
+          </div>
+          <label>Horario exibido<input id="cfg-horario" /></label>
+          <label>Planos JSON<textarea id="cfg-planos"></textarea></label>
+          <button class="btn-save" type="submit">Salvar configuracoes</button>
+          <p class="editor-note">
+            WhatsApp automatico real exige integracao externa como API oficial,
+            Z-API, Twilio ou Evolution API. Este painel prepara mensagens
+            prontas em link.
+          </p>
+        </form>
+      </section>
+    </main>
+
+    <div class="overlay" id="detailOverlay" onclick="fecharDetalhe(event)">
+      <div class="dmodal">
+        <button class="dmodal-close" onclick="fecharDetalheBtn()">x</button>
+        <h2 class="dmodal-title">Detalhes do Agendamento</h2>
+        <div id="detail-content"></div>
+        <div class="dmodal-actions" id="detail-actions"></div>
+      </div>
+    </div>
+  <script type="module" src="admin.js"></script>
+  </body>
 </html>

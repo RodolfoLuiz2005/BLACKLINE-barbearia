@@ -1,18 +1,22 @@
 # BLACKLINE Barber - Sistema de Agendamentos
 
-Site publico, painel administrativo e API Express para a BLACKLINE Barber.
+Site publico e painel administrativo para a BLACKLINE Barber, com Firestore como banco principal do frontend.
 
 ## O que mudou
 
 - A pagina publica nao exibe mais link direto para o painel admin.
-- A fonte unica de dados dos agendamentos agora e o backend Express com JSON local.
-- O admin usa login via API e token assinado. A senha nao fica no frontend.
+- A fonte unica de dados dos agendamentos agora e o Firebase/Firestore na colecao `agendamentos`.
+- O admin usa login local de teste no frontend. Para producao, use Firebase Auth ou uma camada segura propria.
 - Horarios ocupados sao bloqueados por data, horario e profissional, ignorando apenas agendamentos cancelados.
 - Clientes podem consultar, cancelar e reagendar usando WhatsApp + codigo do agendamento.
-- Servicos, profissionais, galeria, redes sociais, mapa, Google e planos mensais sao configuraveis pelo admin.
+- Servicos, profissionais, galeria, redes sociais, mapa, Google e planos mensais sao carregados e salvos no Firestore.
 - WhatsApp de confirmacao e lembrete usa link com mensagem pronta.
 
-## Variaveis de ambiente
+## Backend legado
+
+O backend Express ainda existe no projeto, mas o fluxo atual do frontend nao usa backend para agendamentos, servicos, profissionais, planos, galeria ou configuracoes.
+
+## Variaveis de ambiente do backend legado
 
 Copie `.env.example` e configure:
 
@@ -57,11 +61,86 @@ Depois abra `frontend/index.html` com Live Server, por exemplo:
 http://127.0.0.1:5501/frontend/index.html
 ```
 
-Quando o frontend estiver em `localhost`, `127.0.0.1` ou aberto via arquivo, ele chama a API em `http://localhost:3001`. Em producao, a URL fica relativa ao mesmo dominio.
+Importante: os agendamentos do site publico e do painel ADM usam Firebase/Firestore, nao a API do backend. O projeto Firebase configurado e `blackline-93c09`, em `frontend/firebase-config.js`.
 
-Importante: para carregar servicos, profissionais, horarios e salvar agendamentos, mantenha o backend rodando antes de abrir ou recarregar o site no Live Server.
+## Firebase / Firestore
+
+### Criar e configurar o projeto
+
+1. Crie ou abra o projeto Firebase `blackline-93c09`.
+2. Ative o Firestore Database no modo de teste durante a homologacao.
+3. Copie a configuracao Web do app Firebase.
+4. Cole os valores em `frontend/firebase-config.js`.
+5. Abra o site via Live Server, por exemplo `http://127.0.0.1:5501/frontend/index.html`.
+
+### Colecoes usadas
+
+Os dados do frontend usam estas colecoes:
+
+```text
+agendamentos
+servicos
+profissionais
+planos
+galeria
+configuracoes/barbearia
+```
+
+Campos principais:
+
+- `agendamentos`: `nome`, `telefone`, `servico`, `servicoId`, `profissionalId`, `profissionalNome`, `data`, `horario`, `observacoes`, `status`, `criadoEm`, `atualizadoEm`
+- `servicos`: `nome`, `descricao`, `preco`, `duracao`, `categoria`, `ativo`, `criadoEm`, `atualizadoEm`
+- `profissionais`: `nome`, `especialidade`, `foto`, `ativo`, `horariosAtendimento`, `criadoEm`, `atualizadoEm`
+- `configuracoes/barbearia`: `nome`, `telefone`, `whatsapp`, `instagram`, `endereco`, `googleMapsUrl`, `googleReviewUrl`, `horarioFuncionamento`
+- `galeria`: `titulo`, `imagemUrl`, `categoria`, `ativo`, `criadoEm`
+- `planos`: `nome`, `preco`, `beneficios`, `ativo`, `criadoEm`
+
+### Regras temporarias para teste
+
+```js
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, create, update, delete: if true;
+    }
+  }
+}
+```
+
+Essas regras sao apenas para teste local/homologacao. Nao use em producao, porque qualquer pessoa com acesso ao projeto web poderia ler, alterar ou excluir dados.
+
+### Seed manual
+
+Depois de fazer login no ADM, abra o console do navegador e execute manualmente:
+
+```js
+seedFirebaseBlackline()
+```
+
+Essa funcao cadastra dados iniciais em `servicos`, `profissionais`, `planos`, `galeria` e `configuracoes/barbearia`. Ela nao roda automaticamente ao abrir o site.
+
+### Debug temporario
+
+Na pagina publica, a funcao `testeFirestore()` fica disponivel no console do navegador apenas para validar a conexao local com o Firestore. Ela cria um agendamento de teste em `agendamentos` e lista a quantidade total de documentos. Nao use essa funcao como fluxo de producao.
+
+### Teste cliente -> Firestore -> ADM
+
+1. Abra `frontend/index.html`.
+2. Crie um agendamento.
+3. Verifique no Firebase Console se o documento apareceu em `agendamentos`.
+4. Abra `frontend/admin.html`.
+5. Faca login.
+6. Confira se o agendamento aparece.
+7. Altere o status para confirmado, cancelado e concluido.
+8. Confira no Firebase Console se o status mudou.
+9. Exclua pelo ADM e confira se o documento saiu do Firestore.
+10. Tente agendar o mesmo profissional, data e horario duas vezes; a segunda tentativa deve bloquear.
 
 ## API publica
+
+As rotas abaixo continuam documentadas para o backend legado, mas o fluxo atual de agendamentos no frontend usa Firebase/Firestore diretamente.
 
 | Metodo | Rota | Uso |
 | --- | --- | --- |

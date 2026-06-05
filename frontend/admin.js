@@ -1,7 +1,15 @@
-const API_BASE_URL = location.hostname === '127.0.0.1' || location.hostname === 'localhost'
-  ? 'http://localhost:3001'
-  : '';
+import { getBlacklineDb } from './firebase-config.js';
+
 const TOKEN_KEY = 'bl_admin_token';
+const ADMIN_PASSWORD_HASH = 'ecce7115fb2236a5c799a90b66577fa87de15fa0237876cdd289ff40025eae02';
+const AGENDAMENTOS_COLLECTION = 'agendamentos';
+const SERVICOS_COLLECTION = 'servicos';
+const PROFISSIONAIS_COLLECTION = 'profissionais';
+const PLANOS_COLLECTION = 'planos';
+const GALERIA_COLLECTION = 'galeria';
+const CONFIG_COLLECTION = 'configuracoes';
+const FIRESTORE_MODULE_URL = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+let firestoreApi;
 
 const STATUS = {
   pendente: { label: 'Pendente', cls: 's-pendente' },
@@ -19,6 +27,105 @@ const state = {
   galeria: [],
   config: {}
 };
+
+async function getFirestoreApi() {
+  if (!firestoreApi) firestoreApi = await import(FIRESTORE_MODULE_URL);
+  return firestoreApi;
+}
+
+async function sha256(value) {
+  if (!window.crypto?.subtle?.digest) {
+    throw new Error('Login seguro indisponivel neste navegador. Abra pelo http://127.0.0.1:5501.');
+  }
+
+  const data = new TextEncoder().encode(value);
+  const hash = await window.crypto.subtle.digest('SHA-256', data);
+  return [...new Uint8Array(hash)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function docToAgendamento(snapshot) {
+  return normalizeAgendamento({ id: snapshot.id, ...snapshot.data() });
+}
+
+function docToData(snapshot) {
+  return { id: snapshot.id, ...snapshot.data() };
+}
+
+async function listarAgendamentosFirestore() {
+  const db = await getBlacklineDb();
+  const { collection, getDocs } = await getFirestoreApi();
+  const snap = await getDocs(collection(db, AGENDAMENTOS_COLLECTION));
+  const agendamentos = snap.docs
+    .map(docToAgendamento)
+    .sort((a, b) => `${b.data || ''} ${b.horario || ''}`.localeCompare(`${a.data || ''} ${a.horario || ''}`));
+  return agendamentos;
+}
+
+async function atualizarAgendamentoFirestore(id, payload) {
+  const db = await getBlacklineDb();
+  const { doc, getDoc, serverTimestamp, updateDoc } = await getFirestoreApi();
+  const ref = doc(db, AGENDAMENTOS_COLLECTION, String(id));
+  await updateDoc(ref, { ...payload, atualizadoEm: serverTimestamp() });
+  const updated = await getDoc(ref);
+  return docToAgendamento(updated);
+}
+
+async function excluirAgendamentoFirestore(id) {
+  const db = await getBlacklineDb();
+  const { deleteDoc, doc } = await getFirestoreApi();
+  await deleteDoc(doc(db, AGENDAMENTOS_COLLECTION, String(id)));
+}
+
+async function listarColecaoFirestore(collectionName) {
+  const db = await getBlacklineDb();
+  const { collection, getDocs } = await getFirestoreApi();
+  const snap = await getDocs(collection(db, collectionName));
+  return snap.docs.map(docToData);
+}
+
+async function salvarDocumentoFirestore(collectionName, id, payload) {
+  const db = await getBlacklineDb();
+  const { collection, doc, getDoc, serverTimestamp, setDoc } = await getFirestoreApi();
+  const basePayload = {
+    ...payload,
+    atualizadoEm: serverTimestamp(),
+    ...(id ? {} : { criadoEm: serverTimestamp() })
+  };
+
+  if (id) {
+    const ref = doc(db, collectionName, id);
+    await setDoc(ref, basePayload, { merge: true });
+    const snap = await getDoc(ref);
+    return docToData(snap);
+  }
+
+  const ref = doc(collection(db, collectionName));
+  await setDoc(ref, basePayload);
+  const snap = await getDoc(ref);
+  return docToData(snap);
+}
+
+async function excluirDocumentoFirestore(collectionName, id) {
+  const db = await getBlacklineDb();
+  const { deleteDoc, doc } = await getFirestoreApi();
+  await deleteDoc(doc(db, collectionName, id));
+}
+
+async function carregarConfigFirestore() {
+  const db = await getBlacklineDb();
+  const { doc, getDoc } = await getFirestoreApi();
+  const snap = await getDoc(doc(db, CONFIG_COLLECTION, 'barbearia'));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : {};
+}
+
+async function salvarConfigFirestore(payload) {
+  const db = await getBlacklineDb();
+  const { doc, getDoc, serverTimestamp, setDoc } = await getFirestoreApi();
+  const ref = doc(db, CONFIG_COLLECTION, 'barbearia');
+  await setDoc(ref, { ...payload, atualizadoEm: serverTimestamp() }, { merge: true });
+  const snap = await getDoc(ref);
+  return docToData(snap);
+}
 
 function escapeHTML(value) {
   return String(value ?? '')
@@ -39,17 +146,18 @@ function escapeJsString(value) {
 }
 
 function normalizeAgendamento(ag = {}) {
-  const id = String(ag.id ?? '');
-  const nome = String(ag.nome ?? '');
-  const telefone = String(ag.telefone ?? '');
-  const servico = String(ag.servico ?? '');
-  const data = String(ag.data ?? '');
-  const horario = String(ag.horario ?? '');
+  const id = String(ag.id || '');
+  const nome = ag.nome || '';
+  const telefone = ag.telefone || '';
+  const servico = ag.servico || 'Serviço não informado';
+  const data = ag.data || '';
+  const horario = ag.horario || '';
   const status = STATUS[ag.status] ? ag.status : 'pendente';
-  const profissionalId = String(ag.profissionalId ?? '');
-  const profissionalNome = String(ag.profissionalNome ?? '');
-  const codigo = String(ag.codigo || id.slice(0, 6) || '-');
-  const observacoes = String(ag.observacoes ?? '');
+  const profissionalId = ag.profissionalId || '';
+  const profissionalNome = ag.profissionalNome || '';
+  const shortId = String(ag.id || '').slice(0, 6);
+  const codigo = String(ag.codigo || shortId || '-');
+  const observacoes = ag.observacoes || '';
   return {
     ...ag,
     id,
@@ -66,23 +174,17 @@ function normalizeAgendamento(ag = {}) {
   };
 }
 
-async function api(path, options = {}) {
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(state.token ? { Authorization: `Bearer ${state.token}` } : {}),
-    ...(options.headers || {})
-  };
-  const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
-  const payload = await res.json().catch(() => ({}));
-  if (!res.ok || payload.success === false) {
-    if (res.status === 401) forceLogout();
-    throw new Error(payload.error || 'Erro de conexao.');
-  }
-  return payload.data ?? payload;
-}
-
 function onlyDigits(value) {
   return String(value || '').replace(/\D/g, '');
+}
+
+function slug(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || `item-${Date.now()}`;
 }
 
 function formatPhone(value) {
@@ -116,6 +218,22 @@ function shopPhone() {
   return onlyDigits(state.config.whatsapp || '5581999999999');
 }
 
+function normalizeGaleriaItem(item = {}) {
+  return {
+    ...item,
+    url: item.url || item.imagemUrl || ''
+  };
+}
+
+function normalizeConfig(config = {}) {
+  return {
+    ...config,
+    mapaEmbed: config.mapaEmbed || config.googleMapsUrl || '',
+    googleReviewsUrl: config.googleReviewsUrl || config.googleReviewUrl || '',
+    horarioTexto: config.horarioTexto || config.horarioFuncionamento || ''
+  };
+}
+
 async function tentarLogin() {
   const senhaInput = document.getElementById('login-senha');
   const erro = document.getElementById('login-error');
@@ -129,11 +247,12 @@ async function tentarLogin() {
   btn.textContent = 'Verificando...';
   erro.textContent = '';
   try {
-    const result = await api('/api/admin/login', {
-      method: 'POST',
-      body: JSON.stringify({ senha })
-    });
-    state.token = result.token;
+    const hash = await sha256(senha);
+    if (hash !== ADMIN_PASSWORD_HASH) {
+      throw new Error('Senha incorreta.');
+    }
+
+    state.token = 'admin-test-mode';
     sessionStorage.setItem(TOKEN_KEY, state.token);
     document.getElementById('login-overlay').style.display = 'none';
     await carregarTudo();
@@ -164,13 +283,13 @@ async function init() {
   });
   if (!state.token) return;
   try {
-    await api('/api/admin/me');
     document.getElementById('login-overlay').style.display = 'none';
     await carregarTudo();
     setInterval(() => {
       if (state.view === 'agenda' && state.token) carregarAgendamentos();
     }, 30000);
-  } catch {
+  } catch (err) {
+    console.error('Erro ao inicializar painel ADM:', err);
     forceLogout();
   }
 }
@@ -179,30 +298,50 @@ async function carregarTudo() {
   const btn = document.querySelector('.btn-refresh');
   if (btn) btn.disabled = true;
   try {
-    const [agendamentos, servicos, profissionais, galeria, config] = await Promise.all([
-      api('/api/agendamentos'),
-      api('/api/admin/servicos'),
-      api('/api/admin/profissionais'),
-      api('/api/admin/galeria'),
-      api('/api/admin/configuracoes')
-    ]);
+    const agendamentos = await listarAgendamentosFirestore();
     state.agendamentos = agendamentos || [];
-    state.servicos = servicos || [];
-    state.profissionais = profissionais || [];
-    state.galeria = galeria || [];
-    state.config = config || {};
+    await carregarDadosLegados();
     renderAll();
   } catch (err) {
-    setEstado('erro', err.message);
+    console.error('Erro completo ao carregar agendamentos no Firestore:', err);
+    setEstado('erro', 'Nao foi possivel carregar os agendamentos. Verifique a configuracao e as permissoes do Firestore.');
+    atualizarStats();
   } finally {
     if (btn) btn.disabled = false;
   }
 }
 
 async function carregarAgendamentos() {
-  state.agendamentos = await api('/api/agendamentos');
-  atualizarStats();
-  aplicarFiltros();
+  try {
+    state.agendamentos = await listarAgendamentosFirestore();
+    atualizarStats();
+    aplicarFiltros();
+  } catch (err) {
+    console.error('Erro completo ao atualizar agendamentos no Firestore:', err);
+    setEstado('erro', 'Nao foi possivel atualizar os agendamentos agora.');
+  }
+}
+
+async function carregarDadosLegados() {
+  try {
+    const [servicos, profissionais, galeria, planos, config] = await Promise.all([
+      listarColecaoFirestore(SERVICOS_COLLECTION),
+      listarColecaoFirestore(PROFISSIONAIS_COLLECTION),
+      listarColecaoFirestore(GALERIA_COLLECTION),
+      listarColecaoFirestore(PLANOS_COLLECTION),
+      carregarConfigFirestore()
+    ]);
+    state.servicos = servicos || [];
+    state.profissionais = profissionais || [];
+    state.galeria = (galeria || []).map(normalizeGaleriaItem);
+    state.config = normalizeConfig({ ...(config || {}), planos: planos || [] });
+  } catch (err) {
+    console.error('Dados administrativos nao carregados do Firestore:', err);
+    state.servicos = state.servicos || [];
+    state.profissionais = state.profissionais || [];
+    state.galeria = state.galeria || [];
+    state.config = state.config || {};
+  }
 }
 
 function renderAll() {
@@ -234,8 +373,20 @@ function trocarView(view) {
 function renderProfissionalFilter() {
   const select = document.getElementById('filtro-profissional');
   if (!select) return;
-  select.innerHTML = '<option value="">Todos</option>' + state.profissionais
-    .map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.nome)}</option>`)
+
+  const profissionais = new Map();
+  state.profissionais.forEach(p => {
+    if (p.id) profissionais.set(String(p.id), p.nome || p.id);
+  });
+  state.agendamentos.forEach(raw => {
+    const ag = normalizeAgendamento(raw);
+    if (ag.profissionalId && !profissionais.has(String(ag.profissionalId))) {
+      profissionais.set(String(ag.profissionalId), ag.profissionalNome || ag.profissionalId);
+    }
+  });
+
+  select.innerHTML = '<option value="">Todos</option>' + [...profissionais.entries()]
+    .map(([id, nome]) => `<option value="${escapeHtml(id)}">${escapeHtml(nome)}</option>`)
     .join('');
 }
 
@@ -243,7 +394,7 @@ function atualizarStats() {
   document.getElementById('stat-total').textContent = state.agendamentos.length;
   ['pendente', 'confirmado', 'concluido', 'cancelado'].forEach(s => {
     const el = document.getElementById(`stat-${s}`);
-    if (el) el.textContent = state.agendamentos.filter(a => a.status === s).length;
+    if (el) el.textContent = state.agendamentos.filter(a => normalizeAgendamento(a).status === s).length;
   });
 }
 
@@ -252,14 +403,18 @@ function aplicarFiltros() {
   const data = document.getElementById('filtro-data').value;
   const profissionalId = document.getElementById('filtro-profissional').value;
   const busca = document.getElementById('filtro-busca').value.toLowerCase().trim();
+  const buscaDigits = onlyDigits(busca);
   const lista = state.agendamentos.filter(raw => {
     const ag = normalizeAgendamento(raw);
     if (status && ag.status !== status) return false;
     if (data && ag.data !== data) return false;
     if (profissionalId && ag.profissionalId !== profissionalId) return false;
     if (busca) {
-      const haystack = `${ag.nome || ''} ${ag.telefone || ''} ${ag.codigo || ''}`.toLowerCase();
-      if (!haystack.includes(busca)) return false;
+      const n = (ag.nome || '').toLowerCase();
+      const t = (ag.telefone || '');
+      const haystack = `${n} ${t} ${ag.codigo || ''}`.toLowerCase();
+      const telefoneDigits = onlyDigits(t);
+      if (!haystack.includes(busca) && (!buscaDigits || !telefoneDigits.includes(buscaDigits))) return false;
     }
     return true;
   });
@@ -298,9 +453,10 @@ function renderTabela(lista) {
     const validDate = date && !Number.isNaN(date.getTime());
     const diaF = validDate ? date.toLocaleDateString('pt-BR') : '-';
     const semF = validDate ? date.toLocaleDateString('pt-BR', { weekday: 'long' }) : '';
+    const shortId = String(ag.id || '').slice(0, 6);
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td><span class="cell-id">${escapeHtml(ag.codigo || String(ag.id).slice(0, 6))}</span></td>
+      <td><span class="cell-id">${escapeHtml(ag.codigo || shortId)}</span></td>
       <td><div class="cell-nome">${escapeHtml(ag.nome)}</div></td>
       <td class="cell-tel"><a href="${whatsappLink(tel, `Ola, ${ag.nome || 'cliente'}! Aqui e a BLACKLINE Barber.`)}" target="_blank" rel="noopener">${escapeHtml(formatPhone(tel))}</a></td>
       <td><span class="badge-servico badge-corte">${escapeHtml(ag.servico)}</span></td>
@@ -360,29 +516,25 @@ function fecharDetalheBtn() {
 
 async function atualizarStatus(id, status) {
   try {
-    const updated = await api(`/api/agendamentos/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status })
-    });
+    const updated = await atualizarAgendamentoFirestore(id, { status });
     const idx = state.agendamentos.findIndex(a => String(a.id ?? '') === String(id));
     if (idx !== -1) state.agendamentos[idx] = updated;
     atualizarStats();
     aplicarFiltros();
     fecharDetalheBtn();
   } catch (err) {
-    alert(err.message);
+    console.error('Erro ao atualizar status no Firestore:', err);
+    alert('Nao foi possivel atualizar o status agora.');
   }
 }
 
 async function marcarLembrete(id) {
   try {
-    const updated = await api(`/api/agendamentos/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ lembreteEnviado: true })
-    });
+    const updated = await atualizarAgendamentoFirestore(id, { lembreteEnviado: true });
     const idx = state.agendamentos.findIndex(a => String(a.id ?? '') === String(id));
     if (idx !== -1) state.agendamentos[idx] = updated;
-  } catch {
+  } catch (err) {
+    console.error('Erro ao marcar lembrete no Firestore:', err);
     // O WhatsApp ainda abre; a marcacao visual pode ser refeita depois.
   }
 }
@@ -391,12 +543,13 @@ async function deletar(id) {
   const ag = normalizeAgendamento(state.agendamentos.find(a => String(a.id ?? '') === String(id)));
   if (!ag.id || !confirm(`Remover agendamento de ${ag.nome || 'cliente sem nome'}?`)) return;
   try {
-    await api(`/api/agendamentos/${id}`, { method: 'DELETE' });
-    state.agendamentos = state.agendamentos.filter(a => a.id !== id);
+    await excluirAgendamentoFirestore(id);
+    state.agendamentos = state.agendamentos.filter(a => String(a.id ?? '') !== String(id));
     atualizarStats();
     aplicarFiltros();
   } catch (err) {
-    alert(err.message);
+    console.error('Erro ao excluir agendamento no Firestore:', err);
+    alert('Nao foi possivel excluir o agendamento agora.');
   }
 }
 
@@ -490,7 +643,7 @@ function editarProf(id) {
   document.getElementById('prof-nome').value = p.nome || '';
   document.getElementById('prof-foto').value = p.foto || '';
   document.getElementById('prof-especialidade').value = p.especialidade || '';
-  document.getElementById('prof-horarios').value = JSON.stringify(p.horarios || defaultHorarios(), null, 2);
+  document.getElementById('prof-horarios').value = JSON.stringify(p.horariosAtendimento || p.horarios || defaultHorarios(), null, 2);
   document.getElementById('prof-ativo').checked = p.ativo !== false;
 }
 
@@ -515,7 +668,7 @@ async function salvarProfissional(event) {
     nome: document.getElementById('prof-nome').value.trim(),
     foto: document.getElementById('prof-foto').value.trim(),
     especialidade: document.getElementById('prof-especialidade').value.trim(),
-    horarios,
+    horariosAtendimento: horarios,
     ativo: document.getElementById('prof-ativo').checked
   };
   await saveCollectionItem('profissionais', id, payload);
@@ -560,7 +713,7 @@ async function salvarGaleria(event) {
   const id = document.getElementById('gal-id').value;
   const payload = {
     titulo: document.getElementById('gal-titulo').value.trim(),
-    url: document.getElementById('gal-url').value.trim(),
+    imagemUrl: document.getElementById('gal-url').value.trim(),
     ativo: document.getElementById('gal-ativo').checked
   };
   await saveCollectionItem('galeria', id, payload);
@@ -569,18 +722,17 @@ async function salvarGaleria(event) {
 
 async function saveCollectionItem(collection, id, payload) {
   try {
-    const item = await api(`/api/admin/${collection}${id ? `/${id}` : ''}`, {
-      method: id ? 'PATCH' : 'POST',
-      body: JSON.stringify(payload)
-    });
+    const item = await salvarDocumentoFirestore(collection, id, payload);
+    const normalizedItem = collection === GALERIA_COLLECTION ? normalizeGaleriaItem(item) : item;
     if (id) {
       const index = state[collection].findIndex(row => row.id === id);
-      if (index !== -1) state[collection][index] = item;
+      if (index !== -1) state[collection][index] = normalizedItem;
     } else {
-      state[collection].push(item);
+      state[collection].push(normalizedItem);
     }
     renderAll();
   } catch (err) {
+    console.error(`Erro ao salvar ${collection} no Firestore:`, err);
     alert(err.message);
   }
 }
@@ -588,10 +740,11 @@ async function saveCollectionItem(collection, id, payload) {
 async function removerRegistro(collection, id) {
   if (!confirm('Remover este registro?')) return;
   try {
-    await api(`/api/admin/${collection}/${id}`, { method: 'DELETE' });
+    await excluirDocumentoFirestore(collection, id);
     state[collection] = state[collection].filter(item => item.id !== id);
     renderAll();
   } catch (err) {
+    console.error(`Erro ao remover ${collection} no Firestore:`, err);
     alert(err.message);
   }
 }
@@ -620,25 +773,143 @@ async function salvarConfig(event) {
     return;
   }
   const payload = {
+    nome: 'BLACKLINE Barber',
+    telefone: onlyDigits(document.getElementById('cfg-whatsapp').value),
     instagram: document.getElementById('cfg-instagram').value.trim(),
     facebook: document.getElementById('cfg-facebook').value.trim(),
     tiktok: document.getElementById('cfg-tiktok').value.trim(),
     whatsapp: onlyDigits(document.getElementById('cfg-whatsapp').value),
     endereco: document.getElementById('cfg-endereco').value.trim(),
-    mapaEmbed: document.getElementById('cfg-mapa').value.trim(),
-    googleReviewsUrl: document.getElementById('cfg-google-url').value.trim(),
+    googleMapsUrl: document.getElementById('cfg-mapa').value.trim(),
+    googleReviewUrl: document.getElementById('cfg-google-url').value.trim(),
     googleRating: document.getElementById('cfg-google-rating').value.trim(),
-    horarioTexto: document.getElementById('cfg-horario').value.trim(),
-    planos
+    horarioFuncionamento: document.getElementById('cfg-horario').value.trim()
   };
   try {
-    state.config = await api('/api/admin/configuracoes', {
-      method: 'PATCH',
-      body: JSON.stringify(payload)
-    });
+    state.config = normalizeConfig({ ...(await salvarConfigFirestore(payload)), planos });
+    await Promise.all(planos.map(plano => salvarDocumentoFirestore(PLANOS_COLLECTION, plano.id || slug(plano.nome), {
+      nome: plano.nome || '',
+      preco: Number(plano.preco || 0),
+      beneficios: Array.isArray(plano.beneficios) ? plano.beneficios : [],
+      ativo: plano.ativo !== false
+    })));
     alert('Configuracoes salvas.');
   } catch (err) {
+    console.error('Erro ao salvar configuracoes no Firestore:', err);
     alert(err.message);
+  }
+}
+
+async function seedFirebaseBlackline() {
+  if (!confirm('Cadastrar dados iniciais no Firestore? Esta acao nao roda automaticamente.')) return;
+
+  const servicos = [
+    {
+      id: 'corte-premium',
+      nome: 'Corte Premium',
+      descricao: 'Cortes modernos, fade, social e acabamento preciso.',
+      preco: 45,
+      duracao: 45,
+      categoria: 'Cabelo',
+      ativo: true
+    },
+    {
+      id: 'barba-completa',
+      nome: 'Barba Completa',
+      descricao: 'Design de barba, toalha quente e acabamento navalhado.',
+      preco: 35,
+      duracao: 35,
+      categoria: 'Barba',
+      ativo: true
+    },
+    {
+      id: 'combo-executivo',
+      nome: 'Combo Executivo',
+      descricao: 'Corte, barba e experiencia VIP em uma sessao completa.',
+      preco: 75,
+      duracao: 70,
+      categoria: 'Combo',
+      ativo: true
+    }
+  ];
+
+  const profissionais = [
+    {
+      id: 'bruno-santos',
+      nome: 'Bruno Santos',
+      especialidade: 'Fades e cortes modernos',
+      foto: 'https://images.unsplash.com/photo-1589992896844-9b720813d1cb?q=80&w=800&auto=format&fit=crop',
+      ativo: true,
+      horariosAtendimento: defaultHorarios()
+    },
+    {
+      id: 'diego-lima',
+      nome: 'Diego Lima',
+      especialidade: 'Barba premium e navalha',
+      foto: 'https://images.unsplash.com/photo-1595959183082-7b570b7e08e2?q=80&w=800&auto=format&fit=crop',
+      ativo: true,
+      horariosAtendimento: defaultHorarios()
+    }
+  ];
+
+  const galeria = [
+    {
+      id: 'fade-clean',
+      titulo: 'Fade limpo',
+      imagemUrl: 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?q=80&w=900&auto=format&fit=crop',
+      categoria: 'Cabelo',
+      ativo: true
+    },
+    {
+      id: 'barba-premium',
+      titulo: 'Barba alinhada',
+      imagemUrl: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?q=80&w=900&auto=format&fit=crop',
+      categoria: 'Barba',
+      ativo: true
+    }
+  ];
+
+  const planos = [
+    {
+      id: 'essencial',
+      nome: 'Essencial',
+      preco: 89,
+      beneficios: ['2 cortes por mes', 'Acabamento incluso', 'Agendamento preferencial'],
+      ativo: true
+    },
+    {
+      id: 'premium',
+      nome: 'Premium',
+      preco: 139,
+      beneficios: ['3 cortes por mes', '1 barba completa', 'Toalha quente', 'Prioridade no WhatsApp'],
+      ativo: true
+    }
+  ];
+
+  const config = {
+    nome: 'BLACKLINE Barber',
+    telefone: '5581999999999',
+    whatsapp: '5581999999999',
+    instagram: 'https://www.instagram.com/blacklinebarber',
+    endereco: 'Av. Boa Viagem, Recife - PE',
+    googleMapsUrl: 'https://www.google.com/maps?q=Av.%20Boa%20Viagem%2C%20Recife%20-%20PE&output=embed',
+    googleReviewUrl: 'https://www.google.com/search?q=BLACKLINE+Barber+Recife+avaliacoes',
+    horarioFuncionamento: 'Segunda a Sabado - 08h as 18h'
+  };
+
+  try {
+    await Promise.all([
+      ...servicos.map(item => salvarDocumentoFirestore(SERVICOS_COLLECTION, item.id, item)),
+      ...profissionais.map(item => salvarDocumentoFirestore(PROFISSIONAIS_COLLECTION, item.id, item)),
+      ...galeria.map(item => salvarDocumentoFirestore(GALERIA_COLLECTION, item.id, item)),
+      ...planos.map(item => salvarDocumentoFirestore(PLANOS_COLLECTION, item.id, item)),
+      salvarConfigFirestore(config)
+    ]);
+    alert('Seed inicial criada no Firestore.');
+    await carregarTudo();
+  } catch (err) {
+    console.error('Erro ao executar seed do Firestore:', err);
+    alert('Nao foi possivel executar o seed. Veja o console.');
   }
 }
 
@@ -671,3 +942,4 @@ window.editarGal = editarGal;
 window.resetGalForm = resetGalForm;
 window.removerRegistro = removerRegistro;
 window.salvarConfig = salvarConfig;
+window.seedFirebaseBlackline = seedFirebaseBlackline;
