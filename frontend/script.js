@@ -9,7 +9,7 @@ const PUBLIC_CONFIG = {
   horarioTexto: 'Segunda a Sabado - 08h as 18h',
   mapaEmbed: 'https://www.google.com/maps?q=Av.%20Boa%20Viagem%2C%20Recife%20-%20PE&output=embed',
   googleReviewsUrl: 'https://www.google.com/search?q=BLACKLINE+Barber+Recife+avaliacoes',
-  googleRating: 'Configure no painel'
+  googleRating: 'Configure a nota'
 };
 
 const state = {
@@ -132,6 +132,10 @@ const GALERIA_COLLECTION = 'galeria';
 const CONFIG_COLLECTION = 'configuracoes';
 const FIRESTORE_MODULE_URL = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 let firestoreApi;
+
+function isLocalDebugEnv() {
+  return ['localhost', '127.0.0.1', ''].includes(window.location.hostname);
+}
 
 const DEFAULT_SCHEDULE = {
   1: { ativo: true, inicio: '08:00', fim: '18:00', intervalo: 30 },
@@ -548,7 +552,7 @@ function renderConfig() {
   setHref('social-facebook', cfg.facebook);
   setHref('social-tiktok', cfg.tiktok);
   setHref('google-review-link', cfg.googleReviewsUrl);
-  setText('google-rating-text', cfg.googleRating ? `Nota Google: ${cfg.googleRating}` : 'Avaliacoes reais configuraveis pelo painel.');
+  setText('google-rating-text', cfg.googleRating ? `Nota Google: ${cfg.googleRating}` : 'Avaliacoes reais configuraveis pela barbearia.');
   const map = document.getElementById('site-map');
   if (map && cfg.mapaEmbed) map.src = cfg.mapaEmbed;
 }
@@ -787,6 +791,7 @@ function abrirModal(servico = '') {
   document.getElementById('step-form').style.display = 'block';
   document.getElementById('step-sucesso').style.display = 'none';
   initCalendario();
+  setTimeout(() => document.getElementById('inp-nome')?.focus(), 80);
   if (servico) setTimeout(() => preSelectServico(servico), 0);
 }
 
@@ -819,6 +824,23 @@ function resetForm() {
   document.querySelectorAll('.select-option').forEach(o => o.classList.remove('selected'));
   document.getElementById('horarios-grid').innerHTML = '<p class="horarios-hint">Selecione uma data primeiro</p>';
   state.cal.dataISO = null;
+}
+
+function limparCamposAgendamentoAposSucesso() {
+  ['inp-nome', 'inp-telefone', 'inp-obs'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const serviceInput = document.getElementById('inp-servico');
+  if (serviceInput) serviceInput.value = '';
+  const profInput = document.getElementById('inp-profissional');
+  if (profInput) profInput.value = '';
+  const label = document.getElementById('select-label');
+  if (label) label.textContent = 'Selecione um servico...';
+  document.querySelectorAll('.select-option').forEach(o => o.classList.remove('selected'));
+  state.horarioSelecionado = null;
+  state.servicoSelecionado = '';
+  state.profissionalSelecionado = '';
 }
 
 async function carregarHorarios(dataSelecionada = state.cal.dataISO) {
@@ -981,6 +1003,7 @@ function renderSuccess(ag) {
   document.getElementById('sucesso-whatsapp').href = whatsappLink(getShopPhone(), msg);
   document.getElementById('step-form').style.display = 'none';
   document.getElementById('step-sucesso').style.display = 'block';
+  limparCamposAgendamentoAposSucesso();
 }
 
 function abrirGerenciar() {
@@ -1147,4 +1170,6 @@ window.consultarAgendamento = consultarAgendamento;
 window.cancelarCliente = cancelarCliente;
 window.abrirReagendamento = abrirReagendamento;
 window.reagendarCliente = reagendarCliente;
-window.testeFirestore = testeFirestore;
+if (isLocalDebugEnv()) {
+  window.testeFirestore = testeFirestore;
+}

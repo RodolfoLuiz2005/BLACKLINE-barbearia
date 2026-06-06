@@ -787,12 +787,23 @@ footer{ padding:40px 5%; border-top:1px solid rgba(255,255,255,.05); }
     .cta-box{ padding:50px 30px; }
     .location-info{ padding:35px; }
     .modal{ padding:35px 25px; }
+    .modal-header{ margin-bottom:26px; }
+    .modal-icon{ font-size:2.1rem; margin-bottom:10px; }
+    .modal-header h2{ font-size:1.75rem; }
     .form-grid{ grid-template-columns:1fr; }
+}
+@media(max-height:820px) and (min-width:769px){
+    .modal{ padding:34px 42px; }
+    .modal-header{ margin-bottom:24px; }
+    .modal-icon{ font-size:2rem; margin-bottom:8px; }
+    .modal-header h2{ font-size:1.75rem; margin-bottom:8px; }
 }
 @media(max-width:500px){
     .hero h1{ font-size:2.2rem; }
     .btn-primary, .btn-secondary{ width:100%; text-align:center; }
     .service-card, .testimonial{ padding:30px; }
+    .modal{ padding:28px 20px; border-radius:26px; }
+    .modal-close{ top:14px; right:14px; }
 }
 
 /* ========================= */
