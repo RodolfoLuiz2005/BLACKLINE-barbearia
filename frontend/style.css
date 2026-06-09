@@ -414,6 +414,7 @@ footer{ padding:40px 5%; border-top:1px solid rgba(255,255,255,.05); }
     pointer-events:none;
     transition:.4s;
 }
+
 .modal-overlay.open{
     opacity:1;
     pointer-events:all;
