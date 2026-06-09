@@ -8,7 +8,7 @@ const GALERIA_COLLECTION = 'galeria';
 const CONFIG_COLLECTION = 'configuracoes';
 const FIRESTORE_MODULE_URL = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 const AUTH_MODULE_URL = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
-const ADMIN_UID = 'VaHoF4WF6tWsCImK03tz9HljO6x2';
+const ADMIN_UID = 'HLaZh9fIaPWjIkHgV9koGGyrEJx2';
 let firestoreApi;
 let authApi;
 
