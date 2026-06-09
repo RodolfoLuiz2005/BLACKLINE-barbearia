@@ -15,8 +15,6 @@ services:
       PORT: 3001
       DB_PATH: /app/data/agendamentos.json
       NODE_ENV: development
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-blackline2026}
-      TOKEN_SECRET: ${TOKEN_SECRET:-blackline-dev-secret-change-me}
     volumes:
       - agendamentos-data:/app/data
       - ./backend/server.js:/app/server.js

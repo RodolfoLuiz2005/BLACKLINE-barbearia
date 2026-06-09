@@ -19,6 +19,11 @@ body{
   display:flex;
 }
 
+body:not(.admin-authenticated) .sidebar,
+body:not(.admin-authenticated) .main{
+  display:none;
+}
+
 /* Login */
 #login-overlay{
   position:fixed;

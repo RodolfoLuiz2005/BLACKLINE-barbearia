@@ -1,0 +1,73 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.uid == "VaHoF4WF6tWsCImK03tz9HljO6x2";
+    }
+
+    function hasOnlyPublicAppointmentFields() {
+      return request.resource.data.keys().hasOnly([
+        'id',
+        'codigo',
+        'nome',
+        'telefone',
+        'servico',
+        'servicoId',
+        'profissionalId',
+        'profissionalNome',
+        'data',
+        'horario',
+        'observacoes',
+        'status',
+        'criadoEm',
+        'atualizadoEm'
+      ]);
+    }
+
+    function isValidPublicAppointmentCreate() {
+      return hasOnlyPublicAppointmentFields()
+        && request.resource.data.nome is string
+        && request.resource.data.telefone is string
+        && request.resource.data.codigo is string
+        && request.resource.data.servicoId is string
+        && request.resource.data.profissionalId is string
+        && request.resource.data.data is string
+        && request.resource.data.horario is string
+        && request.resource.data.status == 'pendente';
+    }
+
+    match /servicos/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /profissionais/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /configuracoes/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /galeria/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /planos/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /agendamentos/{id} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() || isValidPublicAppointmentCreate();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}

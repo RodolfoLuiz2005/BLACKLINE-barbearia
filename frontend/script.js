@@ -19,6 +19,8 @@ const state = {
   planos: [],
   config: {},
   apiOffline: false,
+  servicosStatus: 'loading',
+  servicosError: '',
   servicoSelecionado: '',
   profissionalSelecionado: '',
   horarioSelecionado: null,
@@ -152,6 +154,54 @@ async function getFirestoreApi() {
   return firestoreApi;
 }
 
+function logDevError(message, error) {
+  if (isLocalDebugEnv()) console.error(message, error);
+}
+
+function firestoreUserMessage(error, fallback = 'Nao foi possivel carregar os dados agora.') {
+  const code = String(error?.code || '').toLowerCase();
+  const message = String(error?.message || '').toLowerCase();
+
+  if (code.includes('permission-denied') || message.includes('permission-denied')) {
+    return 'Erro de permissao ao acessar os dados. Avise a barbearia para revisar as regras do Firebase.';
+  }
+
+  if (code.includes('unavailable') || message.includes('unavailable') || message.includes('network')) {
+    return 'Erro de conexao com o Firebase. Verifique sua internet e tente novamente.';
+  }
+
+  return fallback;
+}
+
+function publicBlockedMessage(error, fallback) {
+  const code = String(error?.code || '').toLowerCase();
+  const message = String(error?.message || '').toLowerCase();
+  if (code.includes('permission-denied') || message.includes('permission-denied')) return fallback;
+  return error?.message || fallback;
+}
+
+function normalizeCollectionRows(rows) {
+  return Array.isArray(rows) ? rows.filter(Boolean) : [];
+}
+
+function sortByOrderAndName(rows) {
+  return normalizeCollectionRows(rows).sort((a, b) => {
+    const ordemA = Number.isFinite(Number(a.ordem)) ? Number(a.ordem) : 9999;
+    const ordemB = Number.isFinite(Number(b.ordem)) ? Number(b.ordem) : 9999;
+    if (ordemA !== ordemB) return ordemA - ordemB;
+    return String(a.nome || a.titulo || '').localeCompare(String(b.nome || b.titulo || ''), 'pt-BR');
+  });
+}
+
+async function safeLoadCollection(collectionName, fallback = []) {
+  try {
+    return { ok: true, data: await listarColecaoFirestore(collectionName), error: null };
+  } catch (error) {
+    logDevError(`Erro ao carregar colecao ${collectionName} no Firestore:`, error);
+    return { ok: false, data: fallback, error };
+  }
+}
+
 function getSlotId(data, horario, profissionalId) {
   return `${data}_${String(horario || '').replace(':', '-')}_${profissionalId}`;
 }
@@ -201,8 +251,14 @@ function slotsForDate(data, profissionalId = '') {
 async function buscarAgendamentosPorData(data) {
   const db = await getBlacklineDb();
   const { collection, getDocs, query, where } = await getFirestoreApi();
-  const snap = await getDocs(query(collection(db, AGENDAMENTOS_COLLECTION), where('data', '==', data)));
-  return snap.docs.map(docToAgendamento);
+  try {
+    const snap = await getDocs(query(collection(db, AGENDAMENTOS_COLLECTION), where('data', '==', data)));
+    return snap.docs.map(docToAgendamento);
+  } catch (error) {
+    const code = String(error?.code || '').toLowerCase();
+    if (code.includes('permission-denied')) return [];
+    throw error;
+  }
 }
 
 async function listarColecaoFirestore(collectionName) {
@@ -221,80 +277,35 @@ async function carregarConfigFirestore() {
 
 async function criarAgendamentoFirestore(payload) {
   const db = await getBlacklineDb();
-  const { doc, runTransaction, serverTimestamp } = await getFirestoreApi();
+  const { doc, serverTimestamp, setDoc } = await getFirestoreApi();
   const slotId = getSlotId(payload.data, payload.horario, payload.profissionalId);
   const ref = doc(db, AGENDAMENTOS_COLLECTION, slotId);
   const codigo = `BL${Date.now().toString(36).slice(-6).toUpperCase()}`;
+  const agendamento = {
+    ...payload,
+    id: slotId,
+    codigo,
+    status: 'pendente',
+    criadoEm: serverTimestamp(),
+    atualizadoEm: serverTimestamp()
+  };
 
-  return runTransaction(db, async transaction => {
-    const current = await transaction.get(ref);
-    if (current.exists() && normalizeStatus(current.data().status) !== 'cancelado') {
-      throw new Error('Este horário acabou de ser reservado. Escolha outro horário.');
-    }
-
-    const agendamento = {
-      ...payload,
-      id: slotId,
-      codigo,
-      status: 'pendente',
-      criadoEm: serverTimestamp(),
-      atualizadoEm: serverTimestamp()
-    };
-    transaction.set(ref, agendamento);
-    return agendamento;
-  });
-}
-
-async function testeFirestore() {
-  try {
-    const db = await getBlacklineDb();
-    const { collection, doc, getDocs, serverTimestamp, setDoc } = await getFirestoreApi();
-    const agora = new Date();
-    const data = agora.toISOString().slice(0, 10);
-    const horario = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
-    const profissionalId = 'teste-firestore';
-    const slotId = getSlotId(data, horario, profissionalId);
-    const payload = {
-      nome: 'Cliente Teste Firestore',
-      telefone: '81999999999',
-      servico: 'Teste Firestore',
-      servicoId: 'teste-firestore',
-      profissionalId,
-      profissionalNome: 'Profissional Teste',
-      data,
-      horario,
-      observacoes: 'Agendamento criado pela funcao testeFirestore()',
-      status: 'pendente',
-      criadoEm: serverTimestamp(),
-      atualizadoEm: serverTimestamp()
-    };
-
-    console.log('Firebase conectado no cliente', { projectId: db.app.options.projectId });
-    console.log('Dados do agendamento antes de salvar', payload);
-    console.log('ID do documento criado', slotId);
-    await setDoc(doc(db, AGENDAMENTOS_COLLECTION, slotId), payload);
-
-    const snap = await getDocs(collection(db, AGENDAMENTOS_COLLECTION));
-    console.log('testeFirestore funcionou', {
-      documentoCriado: slotId,
-      totalAgendamentos: snap.size
-    });
-    return { ok: true, id: slotId, total: snap.size };
-  } catch (err) {
-    console.error('Erro completo ao testar Firestore no cliente:', err);
-    return { ok: false, erro: err };
-  }
+  await setDoc(ref, agendamento);
+  return agendamento;
 }
 
 async function consultarAgendamentoFirestore(telefone, codigo) {
   const db = await getBlacklineDb();
-  const { collection, getDocs } = await getFirestoreApi();
+  const { collection, getDocs, limit, query, where } = await getFirestoreApi();
   const telefoneDigits = onlyDigits(telefone);
   const codigoBusca = String(codigo || '').trim().toUpperCase();
-  const snap = await getDocs(collection(db, AGENDAMENTOS_COLLECTION));
-  const agendamento = snap.docs
-    .map(docToAgendamento)
-    .find(ag => onlyDigits(ag.telefone) === telefoneDigits && String(ag.codigo || '').toUpperCase() === codigoBusca);
+  const snap = await getDocs(query(
+    collection(db, AGENDAMENTOS_COLLECTION),
+    where('telefone', '==', telefoneDigits),
+    where('codigo', '==', codigoBusca),
+    limit(1)
+  ));
+  const agendamento = snap.docs.map(docToAgendamento)[0];
 
   if (!agendamento) throw new Error('Agendamento nao encontrado.');
   return agendamento;
@@ -324,7 +335,9 @@ async function reagendarAgendamentoFirestore(agendamento, data, horario, profiss
     if (novoSlotId !== String(agendamento.id)) {
       const reservado = await transaction.get(novoRef);
       if (reservado.exists() && normalizeStatus(reservado.data().status) !== 'cancelado') {
-        throw new Error('Este horário acabou de ser reservado. Escolha outro horário.');
+        const error = new Error('Este horario acabou de ser reservado. Escolha outro horario.');
+        error.code = 'slot-taken';
+        throw error;
       }
     }
 
@@ -340,7 +353,12 @@ async function reagendarAgendamentoFirestore(agendamento, data, horario, profiss
     };
 
     transaction.set(novoRef, atualizado);
-    if (novoSlotId !== String(agendamento.id)) transaction.delete(antigoRef);
+    if (novoSlotId !== String(agendamento.id)) {
+      transaction.update(antigoRef, {
+        status: 'cancelado',
+        atualizadoEm: serverTimestamp()
+      });
+    }
   });
 
   const snap = await getDoc(novoRef);
@@ -417,6 +435,31 @@ function renderServicos() {
   const dropdown = document.getElementById('select-dropdown');
   if (!grid || !dropdown) return;
 
+  if (state.servicosStatus === 'error') {
+    const phone = getShopPhone();
+    const msg = 'Ola! Quero agendar na BLACKLINE, mas o site nao carregou os servicos agora.';
+    grid.innerHTML = `
+      <div class="section-loading error service-offline">
+        <p>${escapeHtml(state.servicosError || 'Nao foi possivel carregar os servicos agora.')}</p>
+        <a class="agendar-servico-btn" href="${whatsappLink(phone, msg)}" target="_blank" rel="noopener">Chamar no WhatsApp</a>
+      </div>
+    `;
+    dropdown.innerHTML = '<div class="select-empty">Servicos indisponiveis no momento.</div>';
+    initReveal();
+    return;
+  }
+
+  if (!state.servicos.length) {
+    grid.innerHTML = `
+      <div class="section-loading">
+        <p>Nenhum servico ativo cadastrado ainda. A barbearia precisa cadastrar os servicos no painel ADM.</p>
+      </div>
+    `;
+    dropdown.innerHTML = '<div class="select-empty">Nenhum servico ativo cadastrado.</div>';
+    initReveal();
+    return;
+  }
+
   grid.innerHTML = state.servicos.map(servico => `
     <div class="service-card reveal">
       <div class="service-header">
@@ -465,18 +508,6 @@ function renderServicos() {
       btn.textContent = card.classList.contains('active') ? 'Fechar opcoes' : 'Ver opcoes';
     });
   });
-
-  if (state.apiOffline) {
-    const phone = getShopPhone();
-    const msg = 'Ola! Quero agendar na BLACKLINE, mas o site nao carregou os servicos agora.';
-    const offline = document.createElement('div');
-    offline.className = 'section-loading error service-offline';
-    offline.innerHTML = `
-      <p>Não foi possível carregar os serviços agora. Chame no WhatsApp para agendar.</p>
-      <a class="agendar-servico-btn" href="${whatsappLink(phone, msg)}" target="_blank" rel="noopener">Chamar no WhatsApp</a>
-    `;
-    grid.appendChild(offline);
-  }
 
   initReveal();
 }
@@ -577,29 +608,35 @@ function setHref(id, value) {
 }
 
 async function loadPublicData() {
-  try {
-    const [servicos, profissionais, planos, galeria, configuracoes] = await Promise.all([
-      listarColecaoFirestore(SERVICOS_COLLECTION),
-      listarColecaoFirestore(PROFISSIONAIS_COLLECTION),
-      listarColecaoFirestore(PLANOS_COLLECTION),
-      listarColecaoFirestore(GALERIA_COLLECTION),
-      carregarConfigFirestore()
-    ]);
-    state.servicos = servicos.filter(s => s.ativo !== false).length ? servicos.filter(s => s.ativo !== false) : FALLBACK_DATA.servicos;
-    state.profissionais = profissionais.filter(p => p.ativo !== false).length ? profissionais.filter(p => p.ativo !== false) : FALLBACK_DATA.profissionais;
-    state.planos = planos.filter(p => p.ativo !== false).length ? planos.filter(p => p.ativo !== false) : FALLBACK_DATA.planos;
-    state.galeria = galeria.filter(g => g.ativo !== false).length ? galeria.filter(g => g.ativo !== false) : FALLBACK_DATA.galeria;
-    state.config = normalizeConfig(configuracoes || {});
-    state.apiOffline = false;
-  } catch (err) {
-    console.error('Erro ao carregar dados publicos no Firestore:', err);
-    state.servicos = FALLBACK_DATA.servicos;
-    state.profissionais = FALLBACK_DATA.profissionais;
-    state.planos = FALLBACK_DATA.planos;
-    state.galeria = FALLBACK_DATA.galeria;
-    state.config = {};
-    state.apiOffline = true;
-  }
+  const [servicosResult, profissionaisResult, planosResult, galeriaResult, configResult] = await Promise.all([
+    safeLoadCollection(SERVICOS_COLLECTION),
+    safeLoadCollection(PROFISSIONAIS_COLLECTION, FALLBACK_DATA.profissionais),
+    safeLoadCollection(PLANOS_COLLECTION, FALLBACK_DATA.planos),
+    safeLoadCollection(GALERIA_COLLECTION, FALLBACK_DATA.galeria),
+    carregarConfigFirestore()
+      .then(data => ({ ok: true, data, error: null }))
+      .catch(error => {
+        logDevError('Erro ao carregar configuracoes no Firestore:', error);
+        return { ok: false, data: {}, error };
+      })
+  ]);
+
+  const servicosAtivos = sortByOrderAndName(servicosResult.data).filter(s => s.ativo !== false);
+  const profissionaisAtivos = sortByOrderAndName(profissionaisResult.data).filter(p => p.ativo !== false);
+  const planosAtivos = sortByOrderAndName(planosResult.data).filter(p => p.ativo !== false);
+  const galeriaAtiva = sortByOrderAndName(galeriaResult.data).filter(g => g.ativo !== false);
+
+  state.servicosStatus = servicosResult.ok ? 'ready' : 'error';
+  state.servicosError = servicosResult.ok
+    ? ''
+    : firestoreUserMessage(servicosResult.error, 'Nao foi possivel carregar os servicos agora.');
+  state.servicos = servicosResult.ok ? servicosAtivos : [];
+  state.profissionais = profissionaisResult.ok && profissionaisAtivos.length ? profissionaisAtivos : FALLBACK_DATA.profissionais;
+  state.planos = planosResult.ok && planosAtivos.length ? planosAtivos : FALLBACK_DATA.planos;
+  state.galeria = galeriaResult.ok && galeriaAtiva.length ? galeriaAtiva : FALLBACK_DATA.galeria;
+  state.config = normalizeConfig(configResult.data || {});
+  state.apiOffline = !servicosResult.ok || !profissionaisResult.ok || !planosResult.ok || !galeriaResult.ok || !configResult.ok;
+
   renderConfig();
   renderServicos();
   renderProfissionais();
@@ -873,7 +910,7 @@ async function carregarHorarios(dataSelecionada = state.cal.dataISO) {
     const horarios = slotsForDate(data, profissionalId).filter(horario => !ocupados.has(horario));
     renderHorarios(grid, horarios, horario => { state.horarioSelecionado = horario; });
   } catch (err) {
-    console.error('Erro ao carregar horarios no Firestore:', err);
+    logDevError('Erro ao carregar horarios no Firestore:', err);
     renderHorariosError(grid, () => carregarHorarios(data));
   }
 }
@@ -975,10 +1012,13 @@ async function enviarAgendamento() {
     });
     renderSuccess(ag);
   } catch (err) {
-    console.error('Erro completo ao salvar agendamento no Firestore:', err);
-    const mensagem = err.message.includes('reservado')
-      ? 'Este horário acabou de ser reservado. Escolha outro horário.'
-      : 'Nao foi possivel concluir o agendamento agora. Tente novamente.';
+    logDevError('Erro completo ao salvar agendamento no Firestore:', err);
+    const code = String(err.code || '').toLowerCase();
+    const mensagem = err.code === 'slot-taken'
+      || code.includes('permission-denied')
+      || String(err.message || '').includes('reservado')
+      ? 'Este horario acabou de ser reservado. Escolha outro horario.'
+      : firestoreUserMessage(err, 'Nao foi possivel concluir o agendamento agora. Tente novamente.');
     mostrarErro(mensagem);
     if (data) carregarHorarios(data);
   } finally {
@@ -1035,7 +1075,10 @@ async function consultarAgendamento() {
     state.manageHorario = null;
     renderManageResult(ag);
   } catch (err) {
-    setText('manage-error', err.message);
+    setText('manage-error', publicBlockedMessage(
+      err,
+      'Consulta publica desativada por seguranca. Chame a barbearia pelo WhatsApp.'
+    ));
   }
 }
 
@@ -1066,7 +1109,10 @@ async function cancelarCliente() {
     renderManageResult(ag);
     document.getElementById('reschedule-box').style.display = 'none';
   } catch (err) {
-    setText('manage-error', err.message);
+    setText('manage-error', publicBlockedMessage(
+      err,
+      'Cancelamento publico desativado por seguranca. Chame a barbearia pelo WhatsApp.'
+    ));
   }
 }
 
@@ -1099,7 +1145,7 @@ async function carregarHorariosGerenciar() {
     const horarios = slotsForDate(data, profissionalId).filter(horario => !ocupados.has(horario));
     renderHorarios(grid, horarios, horario => { state.manageHorario = horario; });
   } catch (err) {
-    console.error('Erro ao carregar horarios de reagendamento no Firestore:', err);
+    logDevError('Erro ao carregar horarios de reagendamento no Firestore:', err);
     renderHorariosError(grid, carregarHorariosGerenciar);
   }
 }
@@ -1118,7 +1164,10 @@ async function reagendarCliente() {
     renderManageResult(ag);
     document.getElementById('reschedule-box').style.display = 'none';
   } catch (err) {
-    setText('manage-error', err.message);
+    setText('manage-error', publicBlockedMessage(
+      err,
+      'Reagendamento publico desativado por seguranca. Chame a barbearia pelo WhatsApp.'
+    ));
   }
 }
 
@@ -1170,6 +1219,3 @@ window.consultarAgendamento = consultarAgendamento;
 window.cancelarCliente = cancelarCliente;
 window.abrirReagendamento = abrirReagendamento;
 window.reagendarCliente = reagendarCliente;
-if (isLocalDebugEnv()) {
-  window.testeFirestore = testeFirestore;
-}

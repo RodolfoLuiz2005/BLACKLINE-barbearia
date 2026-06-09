@@ -7,9 +7,6 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 3001;
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'agendamentos.json');
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'blackline2026';
-const TOKEN_SECRET = process.env.TOKEN_SECRET || 'blackline-dev-secret-change-me';
-const TOKEN_TTL_MS = 1000 * 60 * 60 * 8;
 
 const dataDir = path.dirname(DB_PATH);
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
@@ -198,37 +195,11 @@ function makeCode() {
   return `BL${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 }
 
-function hmac(value) {
-  return crypto.createHmac('sha256', TOKEN_SECRET).update(value).digest('base64url');
-}
-
-function createToken() {
-  const payload = {
-    sub: 'admin',
-    iat: Date.now(),
-    exp: Date.now() + TOKEN_TTL_MS,
-    nonce: crypto.randomBytes(8).toString('hex')
-  };
-  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  return `${body}.${hmac(body)}`;
-}
-
-function verifyToken(token) {
-  if (!token || !token.includes('.')) return false;
-  const [body, sig] = token.split('.');
-  if (hmac(body) !== sig) return false;
-  try {
-    const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf-8'));
-    return payload.sub === 'admin' && payload.exp > Date.now();
-  } catch {
-    return false;
-  }
-}
-
 function requireAdmin(req, res, next) {
-  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  if (!verifyToken(token)) return res.status(401).json({ success: false, error: 'Acesso admin nao autorizado.' });
-  next();
+  return res.status(410).json({
+    success: false,
+    error: 'Admin legado desativado. Use Firebase Authentication e Firestore Rules.'
+  });
 }
 
 function normalizePhone(value) {
@@ -523,10 +494,10 @@ app.patch('/api/agendamentos/:id/reagendar', (req, res) => {
 });
 
 app.post('/api/admin/login', (req, res) => {
-  if (String(req.body.senha || '') !== ADMIN_PASSWORD) {
-    return res.status(401).json({ success: false, error: 'Senha incorreta.' });
-  }
-  res.json({ success: true, token: createToken(), expiresInMs: TOKEN_TTL_MS });
+  res.status(410).json({
+    success: false,
+    error: 'Login admin legado desativado. Use Firebase Authentication no painel ADM.'
+  });
 });
 
 app.get('/api/admin/me', requireAdmin, (req, res) => {

@@ -10,6 +10,7 @@ export const firebaseConfig = {
 
 let firebaseApp;
 let firestoreDb;
+let firebaseAuth;
 
 function hasFirebaseConfig(config) {
   return Boolean(
@@ -30,12 +31,29 @@ export async function getBlacklineDb() {
 
   if (firestoreDb) return firestoreDb;
 
-  const [{ initializeApp, getApps }, { getFirestore }] = await Promise.all([
-    import('https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js'),
-    import('https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js')
-  ]);
-
-  firebaseApp = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+  firebaseApp = await getBlacklineApp();
+  const { getFirestore } = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js');
   firestoreDb = getFirestore(firebaseApp);
   return firestoreDb;
+}
+
+export async function getBlacklineApp() {
+  if (!hasFirebaseConfig(firebaseConfig)) {
+    throw new Error('Firebase nao configurado para o projeto blackline-93c09. Preencha apiKey, messagingSenderId e appId em frontend/firebase-config.js.');
+  }
+
+  if (firebaseApp) return firebaseApp;
+
+  const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js');
+  firebaseApp = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+  return firebaseApp;
+}
+
+export async function getBlacklineAuth() {
+  if (firebaseAuth) return firebaseAuth;
+
+  const app = await getBlacklineApp();
+  const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js');
+  firebaseAuth = getAuth(app);
+  return firebaseAuth;
 }

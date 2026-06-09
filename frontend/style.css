@@ -1004,6 +1004,11 @@ textarea.campo-erro {
     margin-top:0;
     text-decoration:none;
 }
+.select-empty{
+    padding:14px 16px;
+    color:var(--muted);
+    font-size:.9rem;
+}
 
 .gallery-section{ background:#070707; }
 .gallery-grid,

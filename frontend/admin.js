@@ -1,7 +1,5 @@
-import { getBlacklineDb } from './firebase-config.js';
+import { getBlacklineAuth, getBlacklineDb } from './firebase-config.js';
 
-const TOKEN_KEY = 'bl_admin_token';
-const ADMIN_PASSWORD_HASH = 'ecce7115fb2236a5c799a90b66577fa87de15fa0237876cdd289ff40025eae02';
 const AGENDAMENTOS_COLLECTION = 'agendamentos';
 const SERVICOS_COLLECTION = 'servicos';
 const PROFISSIONAIS_COLLECTION = 'profissionais';
@@ -9,7 +7,10 @@ const PLANOS_COLLECTION = 'planos';
 const GALERIA_COLLECTION = 'galeria';
 const CONFIG_COLLECTION = 'configuracoes';
 const FIRESTORE_MODULE_URL = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+const AUTH_MODULE_URL = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
+const ADMIN_UID = 'VaHoF4WF6tWsCImK03tz9HljO6x2';
 let firestoreApi;
+let authApi;
 
 const STATUS = {
   pendente: { label: 'Pendente', cls: 's-pendente' },
@@ -19,7 +20,7 @@ const STATUS = {
 };
 
 const state = {
-  token: sessionStorage.getItem(TOKEN_KEY) || '',
+  user: null,
   view: 'agenda',
   agendamentos: [],
   servicos: [],
@@ -33,14 +34,19 @@ async function getFirestoreApi() {
   return firestoreApi;
 }
 
-async function sha256(value) {
-  if (!window.crypto?.subtle?.digest) {
-    throw new Error('Login seguro indisponivel neste navegador. Abra pelo http://127.0.0.1:5501.');
-  }
+async function getAuthApi() {
+  if (!authApi) authApi = await import(AUTH_MODULE_URL);
+  return authApi;
+}
 
-  const data = new TextEncoder().encode(value);
-  const hash = await window.crypto.subtle.digest('SHA-256', data);
-  return [...new Uint8Array(hash)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+function isAdminAuthenticated() {
+  return Boolean(state.user && state.user.uid === ADMIN_UID);
+}
+
+function requireAdminSession() {
+  if (!isAdminAuthenticated()) {
+    throw new Error('Acesso administrativo bloqueado. Faca login novamente.');
+  }
 }
 
 function docToAgendamento(snapshot) {
@@ -52,6 +58,7 @@ function docToData(snapshot) {
 }
 
 async function listarAgendamentosFirestore() {
+  requireAdminSession();
   const db = await getBlacklineDb();
   const { collection, getDocs } = await getFirestoreApi();
   const snap = await getDocs(collection(db, AGENDAMENTOS_COLLECTION));
@@ -62,6 +69,7 @@ async function listarAgendamentosFirestore() {
 }
 
 async function atualizarAgendamentoFirestore(id, payload) {
+  requireAdminSession();
   const db = await getBlacklineDb();
   const { doc, getDoc, serverTimestamp, updateDoc } = await getFirestoreApi();
   const ref = doc(db, AGENDAMENTOS_COLLECTION, String(id));
@@ -71,12 +79,14 @@ async function atualizarAgendamentoFirestore(id, payload) {
 }
 
 async function excluirAgendamentoFirestore(id) {
+  requireAdminSession();
   const db = await getBlacklineDb();
   const { deleteDoc, doc } = await getFirestoreApi();
   await deleteDoc(doc(db, AGENDAMENTOS_COLLECTION, String(id)));
 }
 
 async function listarColecaoFirestore(collectionName) {
+  requireAdminSession();
   const db = await getBlacklineDb();
   const { collection, getDocs } = await getFirestoreApi();
   const snap = await getDocs(collection(db, collectionName));
@@ -84,34 +94,38 @@ async function listarColecaoFirestore(collectionName) {
 }
 
 async function salvarDocumentoFirestore(collectionName, id, payload) {
+  requireAdminSession();
   const db = await getBlacklineDb();
   const { collection, doc, getDoc, serverTimestamp, setDoc } = await getFirestoreApi();
-  const basePayload = {
-    ...payload,
-    atualizadoEm: serverTimestamp(),
-    ...(id ? {} : { criadoEm: serverTimestamp() })
-  };
 
   if (id) {
     const ref = doc(db, collectionName, id);
+    const current = await getDoc(ref);
+    const basePayload = {
+      ...payload,
+      atualizadoEm: serverTimestamp(),
+      ...(current.exists() ? {} : { criadoEm: serverTimestamp() })
+    };
     await setDoc(ref, basePayload, { merge: true });
     const snap = await getDoc(ref);
     return docToData(snap);
   }
 
   const ref = doc(collection(db, collectionName));
-  await setDoc(ref, basePayload);
+  await setDoc(ref, { ...payload, criadoEm: serverTimestamp(), atualizadoEm: serverTimestamp() });
   const snap = await getDoc(ref);
   return docToData(snap);
 }
 
 async function excluirDocumentoFirestore(collectionName, id) {
+  requireAdminSession();
   const db = await getBlacklineDb();
   const { deleteDoc, doc } = await getFirestoreApi();
   await deleteDoc(doc(db, collectionName, id));
 }
 
 async function carregarConfigFirestore() {
+  requireAdminSession();
   const db = await getBlacklineDb();
   const { doc, getDoc } = await getFirestoreApi();
   const snap = await getDoc(doc(db, CONFIG_COLLECTION, 'barbearia'));
@@ -119,6 +133,7 @@ async function carregarConfigFirestore() {
 }
 
 async function salvarConfigFirestore(payload) {
+  requireAdminSession();
   const db = await getBlacklineDb();
   const { doc, getDoc, serverTimestamp, setDoc } = await getFirestoreApi();
   const ref = doc(db, CONFIG_COLLECTION, 'barbearia');
@@ -218,6 +233,14 @@ function shopPhone() {
   return onlyDigits(state.config.whatsapp || '5581999999999');
 }
 
+function getSlotId(data, horario, profissionalId) {
+  return `${data}_${String(horario || '').replace(':', '-')}_${profissionalId}`;
+}
+
+function makeCode(prefix = 'BL') {
+  return `${prefix}${Date.now().toString(36).slice(-4).toUpperCase()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+}
+
 function normalizeGaleriaItem(item = {}) {
   return {
     ...item,
@@ -234,30 +257,61 @@ function normalizeConfig(config = {}) {
   };
 }
 
+function authErrorMessage(error) {
+  const code = String(error?.code || '');
+  if (code.includes('auth/invalid-credential') || code.includes('auth/wrong-password') || code.includes('auth/user-not-found')) {
+    return 'Email ou senha invalidos.';
+  }
+  if (code.includes('auth/too-many-requests')) {
+    return 'Muitas tentativas de login. Aguarde um pouco e tente novamente.';
+  }
+  if (code.includes('auth/network-request-failed')) {
+    return 'Erro de conexao com o Firebase Auth.';
+  }
+  if (code.includes('auth/operation-not-allowed')) {
+    return 'Login por email/senha ainda nao esta ativado no Firebase Auth.';
+  }
+  return error?.message || 'Nao foi possivel fazer login.';
+}
+
+function setLoginError(message = '') {
+  const erro = document.getElementById('login-error');
+  if (erro) erro.textContent = message;
+}
+
+function showLogin(message = '') {
+  state.user = null;
+  document.body.classList.remove('admin-authenticated');
+  document.getElementById('login-overlay').style.display = 'flex';
+  setLoginError(message);
+}
+
+function showAdminPanel() {
+  document.body.classList.add('admin-authenticated');
+  document.getElementById('login-overlay').style.display = 'none';
+  setLoginError('');
+}
+
 async function tentarLogin() {
+  const emailInput = document.getElementById('login-email');
   const senhaInput = document.getElementById('login-senha');
   const erro = document.getElementById('login-error');
   const btn = document.getElementById('login-btn');
+  const email = emailInput.value.trim();
   const senha = senhaInput.value;
-  if (!senha) {
-    erro.textContent = 'Informe a senha.';
+  if (!email || !senha) {
+    erro.textContent = 'Informe email e senha.';
     return;
   }
   btn.disabled = true;
   btn.textContent = 'Verificando...';
   erro.textContent = '';
   try {
-    const hash = await sha256(senha);
-    if (hash !== ADMIN_PASSWORD_HASH) {
-      throw new Error('Senha incorreta.');
-    }
-
-    state.token = 'admin-test-mode';
-    sessionStorage.setItem(TOKEN_KEY, state.token);
-    document.getElementById('login-overlay').style.display = 'none';
-    await carregarTudo();
+    const auth = await getBlacklineAuth();
+    const { signInWithEmailAndPassword } = await getAuthApi();
+    await signInWithEmailAndPassword(auth, email, senha);
   } catch (err) {
-    erro.textContent = err.message;
+    erro.textContent = authErrorMessage(err);
     senhaInput.value = '';
     senhaInput.focus();
   } finally {
@@ -267,31 +321,52 @@ async function tentarLogin() {
 }
 
 function forceLogout() {
-  state.token = '';
-  sessionStorage.removeItem(TOKEN_KEY);
-  document.getElementById('login-overlay').style.display = 'flex';
+  showLogin();
 }
 
-function sair() {
+async function sair() {
+  const auth = await getBlacklineAuth();
+  const { signOut } = await getAuthApi();
+  await signOut(auth);
   forceLogout();
-  location.reload();
 }
 
 async function init() {
+  const emailInput = document.getElementById('login-email');
   document.getElementById('login-senha')?.addEventListener('keydown', e => {
     if (e.key === 'Enter') tentarLogin();
   });
-  if (!state.token) return;
-  try {
-    document.getElementById('login-overlay').style.display = 'none';
-    await carregarTudo();
-    setInterval(() => {
-      if (state.view === 'agenda' && state.token) carregarAgendamentos();
-    }, 30000);
-  } catch (err) {
-    console.error('Erro ao inicializar painel ADM:', err);
-    forceLogout();
-  }
+  emailInput?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') tentarLogin();
+  });
+
+  const auth = await getBlacklineAuth();
+  const { onAuthStateChanged } = await getAuthApi();
+  onAuthStateChanged(auth, async user => {
+    if (!user) {
+      showLogin();
+      return;
+    }
+
+    if (user.uid !== ADMIN_UID) {
+      await sair();
+      showLogin('Usuario autenticado, mas sem permissao para este painel.');
+      return;
+    }
+
+    state.user = user;
+    try {
+      showAdminPanel();
+      await carregarTudo();
+    } catch (err) {
+      console.error('Erro ao inicializar painel ADM:', err);
+      forceLogout();
+    }
+  });
+
+  setInterval(() => {
+    if (state.view === 'agenda' && isAdminAuthenticated()) carregarAgendamentos();
+  }, 30000);
 }
 
 async function carregarTudo() {
@@ -805,31 +880,54 @@ async function seedFirebaseBlackline() {
 
   const servicos = [
     {
-      id: 'corte-premium',
-      nome: 'Corte Premium',
-      descricao: 'Cortes modernos, fade, social e acabamento preciso.',
+      id: 'corte-masculino',
+      nome: 'Corte Masculino',
+      descricao: 'Corte masculino com consultoria de estilo e acabamento na navalha.',
       preco: 45,
       duracao: 45,
       categoria: 'Cabelo',
-      ativo: true
+      ativo: true,
+      ordem: 1
     },
     {
-      id: 'barba-completa',
-      nome: 'Barba Completa',
-      descricao: 'Design de barba, toalha quente e acabamento navalhado.',
-      preco: 35,
+      id: 'barba-premium',
+      nome: 'Barba Premium',
+      descricao: 'Barba modelada com toalha quente, produtos premium e acabamento preciso.',
+      preco: 40,
       duracao: 35,
       categoria: 'Barba',
-      ativo: true
+      ativo: true,
+      ordem: 2
     },
     {
-      id: 'combo-executivo',
-      nome: 'Combo Executivo',
-      descricao: 'Corte, barba e experiencia VIP em uma sessao completa.',
+      id: 'corte-barba',
+      nome: 'Corte + Barba',
+      descricao: 'Combo completo com corte, barba e finalizacao BLACKLINE.',
       preco: 75,
       duracao: 70,
       categoria: 'Combo',
-      ativo: true
+      ativo: true,
+      ordem: 3
+    },
+    {
+      id: 'sobrancelha',
+      nome: 'Sobrancelha',
+      descricao: 'Design e limpeza de sobrancelha com acabamento natural.',
+      preco: 20,
+      duracao: 20,
+      categoria: 'Acabamento',
+      ativo: true,
+      ordem: 4
+    },
+    {
+      id: 'pigmentacao',
+      nome: 'Pigmentacao',
+      descricao: 'Pigmentacao capilar ou de barba para realce e preenchimento.',
+      preco: 60,
+      duracao: 45,
+      categoria: 'Tratamento',
+      ativo: true,
+      ordem: 5
     }
   ];
 
@@ -847,6 +945,14 @@ async function seedFirebaseBlackline() {
       nome: 'Diego Lima',
       especialidade: 'Barba premium e navalha',
       foto: 'https://images.unsplash.com/photo-1595959183082-7b570b7e08e2?q=80&w=800&auto=format&fit=crop',
+      ativo: true,
+      horariosAtendimento: defaultHorarios()
+    },
+    {
+      id: 'rafael-costa',
+      nome: 'Rafael Costa',
+      especialidade: 'Cortes classicos e pigmentacao',
+      foto: 'https://images.unsplash.com/photo-1621605815971-fbc98d665033?q=80&w=800&auto=format&fit=crop',
       ativo: true,
       horariosAtendimento: defaultHorarios()
     }
@@ -913,6 +1019,113 @@ async function seedFirebaseBlackline() {
   }
 }
 
+async function seedAgendamentosTesteBlackline() {
+  if (!confirm('Criar 10 agendamentos simulados no Firestore? Use apenas em homologacao.')) return;
+  requireAdminSession();
+
+  const baseDate = new Date();
+  baseDate.setDate(baseDate.getDate() + 1);
+  while (baseDate.getDay() === 0) baseDate.setDate(baseDate.getDate() + 1);
+
+  const profissionais = state.profissionais.length ? state.profissionais : [
+    { id: 'bruno-santos', nome: 'Bruno Santos' },
+    { id: 'diego-lima', nome: 'Diego Lima' },
+    { id: 'rafael-costa', nome: 'Rafael Costa' }
+  ];
+  const servicos = state.servicos.length ? state.servicos : [
+    { id: 'corte-masculino', nome: 'Corte Masculino' },
+    { id: 'barba-premium', nome: 'Barba Premium' },
+    { id: 'corte-barba', nome: 'Corte + Barba' }
+  ];
+  const horarios = ['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '14:00', '14:30', '15:00'];
+  const nomes = ['Andre Silva', 'Carlos Souza', 'Marcos Lima', 'Joao Pereira', 'Felipe Rocha', 'Lucas Mendes', 'Rafael Alves', 'Bruno Costa', 'Diego Ramos', 'Paulo Santos'];
+
+  try {
+    const payloads = nomes.map((nome, index) => {
+      const dataObj = new Date(baseDate);
+      dataObj.setDate(baseDate.getDate() + Math.floor(index / 3));
+      if (dataObj.getDay() === 0) dataObj.setDate(dataObj.getDate() + 1);
+      const data = dataObj.toISOString().slice(0, 10);
+      const profissional = profissionais[index % profissionais.length];
+      const servico = servicos[index % servicos.length];
+      const horario = horarios[index];
+      const id = getSlotId(data, horario, profissional.id);
+      return {
+        id,
+        nome,
+        telefone: `8199${String(9000000 + index).padStart(7, '0')}`,
+        servicoId: servico.id,
+        servico: servico.nome,
+        profissionalId: profissional.id,
+        profissionalNome: profissional.nome,
+        data,
+        horario,
+        observacoes: 'Agendamento simulado para homologacao.',
+        status: index % 4 === 0 ? 'confirmado' : 'pendente',
+        codigo: makeCode('T')
+      };
+    });
+
+    await Promise.all(payloads.map(({ id, ...payload }) => salvarDocumentoFirestore(AGENDAMENTOS_COLLECTION, id, payload)));
+    alert('10 agendamentos simulados foram criados.');
+    await carregarTudo();
+  } catch (err) {
+    console.error('Erro ao criar agendamentos simulados:', err);
+    alert('Nao foi possivel criar os agendamentos simulados. Veja o console.');
+  }
+}
+
+async function testarDuplicidadeAgendamentoBlackline() {
+  requireAdminSession();
+
+  const db = await getBlacklineDb();
+  const { doc, runTransaction, serverTimestamp } = await getFirestoreApi();
+  const profissional = state.profissionais.find(p => p.ativo !== false) || { id: 'bruno-santos', nome: 'Bruno Santos' };
+  const servico = state.servicos.find(s => s.ativo !== false) || { id: 'corte-masculino', nome: 'Corte Masculino' };
+  const dataObj = new Date();
+  dataObj.setDate(dataObj.getDate() + 2);
+  while (dataObj.getDay() === 0) dataObj.setDate(dataObj.getDate() + 1);
+  const data = dataObj.toISOString().slice(0, 10);
+  const horario = '16:00';
+  const id = getSlotId(data, horario, profissional.id);
+  const ref = doc(db, AGENDAMENTOS_COLLECTION, id);
+
+  async function reservar(nome) {
+    return runTransaction(db, async transaction => {
+      const current = await transaction.get(ref);
+      if (current.exists() && current.data().status !== 'cancelado') {
+        throw new Error('Duplicidade bloqueada: horario ja reservado.');
+      }
+      transaction.set(ref, {
+        nome,
+        telefone: '81999999999',
+        servicoId: servico.id,
+        servico: servico.nome,
+        profissionalId: profissional.id,
+        profissionalNome: profissional.nome,
+        data,
+        horario,
+        observacoes: 'Teste de duplicidade por transacao.',
+        status: 'pendente',
+        codigo: makeCode('D'),
+        criadoEm: serverTimestamp(),
+        atualizadoEm: serverTimestamp()
+      });
+    });
+  }
+
+  await reservar('Teste Duplicidade Um');
+  try {
+    await reservar('Teste Duplicidade Dois');
+    alert('Falha no teste: a duplicidade nao foi bloqueada.');
+    return false;
+  } catch (err) {
+    alert(err.message);
+    await carregarTudo();
+    return true;
+  }
+}
+
 document.addEventListener('DOMContentLoaded', init);
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') fecharDetalheBtn();
@@ -943,3 +1156,5 @@ window.resetGalForm = resetGalForm;
 window.removerRegistro = removerRegistro;
 window.salvarConfig = salvarConfig;
 window.seedFirebaseBlackline = seedFirebaseBlackline;
+window.seedAgendamentosTesteBlackline = seedAgendamentosTesteBlackline;
+window.testarDuplicidadeAgendamentoBlackline = testarDuplicidadeAgendamentoBlackline;

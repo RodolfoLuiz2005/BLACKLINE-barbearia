@@ -18,16 +18,23 @@
         <div class="login-logo">BLACK<span>LINE</span></div>
         <h2>Painel admin</h2>
         <input
+          type="email"
+          id="login-email"
+          placeholder="Email do admin"
+          autocomplete="username"
+          autofocus
+        />
+        <input
           type="password"
           id="login-senha"
           placeholder="Digite a senha"
-          autofocus
+          autocomplete="current-password"
         />
         <button id="login-btn" onclick="tentarLogin()">Entrar</button>
         <div id="login-error"></div>
         <p class="login-hint">
-          Modo teste local. Para producao, proteja o acesso com autenticacao
-          segura.
+          Acesso protegido por Firebase Auth e UID autorizado nas regras do
+          Firestore.
         </p>
       </div>
     </div>
