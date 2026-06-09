@@ -49,6 +49,58 @@ function requireAdminSession() {
   }
 }
 
+async function getAdminAuthDiagnostics() {
+  let authUser = null;
+  let authError = null;
+
+  try {
+    const auth = await getBlacklineAuth();
+    authUser = auth.currentUser || null;
+  } catch (err) {
+    authError = {
+      code: err?.code || null,
+      message: err?.message || String(err)
+    };
+  }
+
+  const effectiveUser = state.user || authUser;
+  const effectiveUid = effectiveUser?.uid || null;
+
+  return {
+    uidUsuarioLogado: effectiveUid,
+    stateUserExiste: Boolean(state.user),
+    stateUserUid: state.user?.uid || null,
+    authCurrentUserExiste: Boolean(authUser),
+    authCurrentUserUid: authUser?.uid || null,
+    adminUidEsperado: ADMIN_UID,
+    uidIgualAoAdminUid: effectiveUid === ADMIN_UID,
+    authError
+  };
+}
+
+async function validateAdminBeforeSeed() {
+  const diagnostics = await getAdminAuthDiagnostics();
+
+  if (diagnostics.authCurrentUserExiste && !state.user) {
+    const auth = await getBlacklineAuth();
+    state.user = auth.currentUser || null;
+  }
+
+  if (!diagnostics.uidUsuarioLogado) {
+    console.error('Seed bloqueado: nenhum usuario logado.', diagnostics);
+    alert('Seed bloqueado: faca login no painel ADM antes de executar o seed.');
+    return false;
+  }
+
+  if (!diagnostics.uidIgualAoAdminUid) {
+    console.error('Seed bloqueado: usuario logado nao e o admin autorizado.', diagnostics);
+    alert('Seed bloqueado: este usuario nao tem permissao de admin.');
+    return false;
+  }
+
+  return true;
+}
+
 function docToAgendamento(snapshot) {
   return normalizeAgendamento({ id: snapshot.id, ...snapshot.data() });
 }
@@ -876,6 +928,7 @@ async function salvarConfig(event) {
 }
 
 async function seedFirebaseBlackline() {
+  if (!(await validateAdminBeforeSeed())) return;
   if (!confirm('Cadastrar dados iniciais no Firestore? Esta acao nao roda automaticamente.')) return;
 
   const servicos = [
@@ -1014,7 +1067,20 @@ async function seedFirebaseBlackline() {
     alert('Seed inicial criada no Firestore.');
     await carregarTudo();
   } catch (err) {
-    console.error('Erro ao executar seed do Firestore:', err);
+    const diagnostics = await getAdminAuthDiagnostics();
+    console.error('Erro ao executar seed do Firestore:', {
+      errorCode: err?.code || null,
+      errorMessage: err?.message || String(err),
+      uidUsuarioLogado: diagnostics.uidUsuarioLogado,
+      stateUserExiste: diagnostics.stateUserExiste,
+      stateUserUid: diagnostics.stateUserUid,
+      authCurrentUserExiste: diagnostics.authCurrentUserExiste,
+      authCurrentUserUid: diagnostics.authCurrentUserUid,
+      adminUidEsperado: diagnostics.adminUidEsperado,
+      uidIgualAoAdminUid: diagnostics.uidIgualAoAdminUid,
+      authError: diagnostics.authError,
+      erroOriginal: err
+    });
     alert('Nao foi possivel executar o seed. Veja o console.');
   }
 }
