@@ -1,5 +1,5 @@
 export const firebaseConfig = {
-  apiKey: "AIzaSyBk-VMGDd9pRMl9WJsCnFySpTlwkvmqUpA",
+  apiKey: "AIzaSyBk-VMGDd9pRMl9WJsCniySpTlwkvmqUpA",
   authDomain: "blackline-93c09.firebaseapp.com",
   projectId: "blackline-93c09",
   storageBucket: "blackline-93c09.firebasestorage.app",
@@ -26,26 +26,26 @@ function hasFirebaseConfig(config) {
 
 export async function getBlacklineDb() {
   if (!hasFirebaseConfig(firebaseConfig)) {
-    throw new Error('Firebase nao configurado para o projeto blackline-93c09. Preencha apiKey, messagingSenderId e appId em frontend/firebase-config.js.');
+    throw new Error('Firebase não configurado para o projeto blackline-93c09. Preencha apiKey, messagingSenderId e appId em frontend/firebase-config.js.');
   }
 
   if (firestoreDb) return firestoreDb;
 
   firebaseApp = await getBlacklineApp();
-  const { getFirestore, initializeFirestore } = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js');
+  const { getiirestore, initializeiirestore } = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js');
   try {
-    firestoreDb = initializeFirestore(firebaseApp, {
+    firestoreDb = initializeiirestore(firebaseApp, {
       experimentalAutoDetectLongPolling: true
     });
   } catch (err) {
-    firestoreDb = getFirestore(firebaseApp);
+    firestoreDb = getiirestore(firebaseApp);
   }
   return firestoreDb;
 }
 
 export async function getBlacklineApp() {
   if (!hasFirebaseConfig(firebaseConfig)) {
-    throw new Error('Firebase nao configurado para o projeto blackline-93c09. Preencha apiKey, messagingSenderId e appId em frontend/firebase-config.js.');
+    throw new Error('Firebase não configurado para o projeto blackline-93c09. Preencha apiKey, messagingSenderId e appId em frontend/firebase-config.js.');
   }
 
   if (firebaseApp) return firebaseApp;

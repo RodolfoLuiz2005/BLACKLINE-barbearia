@@ -9,7 +9,7 @@ export const BLACKLINE_CONFIG = {
     address: 'Av. Boa Viagem, 1250 - Boa Viagem, Recife - PE',
     hoursText: 'Segunda a sábado, das 09h às 20h',
     instagram: 'https://www.instagram.com/blacklinebarbearia',
-    googleReviewsUrl: 'https://www.google.com/search?q=Blackline+Barbearia+Recife+avaliacoes',
+    googleReviewsUrl: 'https://www.google.com/search?q=Blackline+Barbearia+Recife+avalia%C3%A7%C3%B5es',
     mapEmbed: 'https://www.google.com/maps?q=Av.%20Boa%20Viagem%201250%20Recife%20PE&output=embed'
   },
   assets: {
@@ -20,7 +20,7 @@ export const BLACKLINE_CONFIG = {
   services: [
     { id: 'corte-degrade', name: 'Corte degradê', duration: '45 min', durationMinutes: 45, price: 35, description: 'Corte moderno com acabamento navalhado.' },
     { id: 'corte-social', name: 'Corte social', duration: '40 min', durationMinutes: 40, price: 30, description: 'Corte clássico, limpo e alinhado.' },
-    { id: 'barba-completa', name: 'Barba completa', duration: '30 min', durationMinutes: 30, price: 25, description: 'Barba modelada com toalha quente e finalizacao.' },
+    { id: 'barba-completa', name: 'Barba completa', duration: '30 min', durationMinutes: 30, price: 25, description: 'Barba modelada com toalha quente e finalização.' },
     { id: 'corte-barba', name: 'Corte + barba', duration: '1h10', durationMinutes: 70, price: 55, description: 'Combo completo para renovar o visual.' },
     { id: 'sobrancelha', name: 'Sobrancelha', duration: '15 min', durationMinutes: 15, price: 15, description: 'Design simples para acabamento do rosto.' },
     { id: 'pigmentacao', name: 'Pigmentação', duration: '40 min', durationMinutes: 40, price: 45, description: 'Pigmentação capilar ou de barba com acabamento natural.' }
@@ -28,11 +28,11 @@ export const BLACKLINE_CONFIG = {
   barbers: [
     { id: 'rafael-lima', name: 'Rafael Lima', specialty: 'Especialista em degradê e navalhado', availableDays: 'Segunda a sábado', availableWeekDays: [1, 2, 3, 4, 5, 6], unavailableDates: [], photo: 'https://images.unsplash.com/photo-1618077360395-f3068be8e001?q=80&w=900&auto=format&fit=crop' },
     { id: 'marcos-silva', name: 'Marcos Silva', specialty: 'Barba, corte clássico e social', availableDays: 'Terça a sábado', availableWeekDays: [2, 3, 4, 5, 6], unavailableDates: [], photo: 'https://images.unsplash.com/photo-1582893561942-d61adcb2e534?q=80&w=900&auto=format&fit=crop' },
-    { id: 'andre-costa', name: 'Andre Costa', specialty: 'Corte moderno, freestyle e pigmentação', availableDays: 'Quarta a sábado', availableWeekDays: [3, 4, 5, 6], unavailableDates: [], photo: 'https://images.unsplash.com/photo-1621605815971-fbc98d665033?q=80&w=900&auto=format&fit=crop' }
+    { id: 'andre-costa', name: 'André Costa', specialty: 'Corte moderno, freestyle e pigmentação', availableDays: 'Quarta a sábado', availableWeekDays: [3, 4, 5, 6], unavailableDates: [], photo: 'https://images.unsplash.com/photo-1621605815971-fbc98d665033?q=80&w=900&auto=format&fit=crop' }
   ],
   sampleTestimonials: [
     { name: 'Lucas Andrade', text: 'Atendimento pontual, corte bem alinhado e ambiente acima do que eu esperava.', rating: 5 },
-    { name: 'Henrique Moura', text: 'Fiz corte e barba. O acabamento na navalha ficou impecavel.', rating: 5 },
+    { name: 'Henrique Moura', text: 'Fiz corte e barba. O acabamento na navalha ficou impecável.', rating: 5 },
     { name: 'Caio Martins', text: 'Barbeiros cuidadosos, horário respeitado e resultado muito profissional.', rating: 5 }
   ],
   schedule: {
