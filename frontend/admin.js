@@ -5,9 +5,54 @@ const STATUS = {
   pendente: { label: 'Pendente', className: 'pending' },
   confirmado: { label: 'Confirmado', className: 'confirmed' },
   em_atendimento: { label: 'Em atendimento', className: 'serving' },
-  concluido: { label: 'Concluido', className: 'done' },
+  concluido: { label: 'Concluído', className: 'done' },
   cancelado: { label: 'Cancelado', className: 'canceled' }
 };
+const ADMIN_SESSION_KEY = 'blackline:admin:session';
+const ADMIN_PIN_HASH = '158a323a7ba44870f23d96f1516dd70aa48e9a72db4ebb026b0a89e212a208ab';
+let adminEventsBound = false;
+
+// Autenticação provisória para ambiente sem backend. Em produção, substitua por autenticação real no servidor (Supabase, Firebase Auth ou API própria) e regras de autorização no backend.
+async function hashText(value) {
+  const data = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+function isAdminAuthenticated() { return sessionStorage.getItem(ADMIN_SESSION_KEY) === 'ok'; }
+function showAdminLogin(message = '') {
+  byId('admin-login').hidden = false;
+  byId('admin-shell').hidden = true;
+  byId('admin-main').hidden = true;
+  byId('admin-login-feedback').textContent = message;
+  byId('admin-login-feedback').className = message ? 'form-feedback error' : 'form-feedback';
+}
+function showAdminPanel() {
+  byId('admin-login').hidden = true;
+  byId('admin-shell').hidden = false;
+  byId('admin-main').hidden = false;
+}
+async function handleAdminLogin(event) {
+  event.preventDefault();
+  const pin = byId('admin-pin').value.trim();
+  if (!pin) {
+    showAdminLogin('Informe o PIN administrativo.');
+    return;
+  }
+  if (await hashText(pin) !== ADMIN_PIN_HASH) {
+    showAdminLogin('PIN inválido.');
+    return;
+  }
+  sessionStorage.setItem(ADMIN_SESSION_KEY, 'ok');
+  showAdminPanel();
+  attachEvents();
+  renderTable();
+  toast('Acesso liberado.');
+}
+function logoutAdmin() {
+  sessionStorage.removeItem(ADMIN_SESSION_KEY);
+  byId('admin-pin').value = '';
+  showAdminLogin();
+}
 
 function byId(id) { return document.getElementById(id); }
 function escapeHtml(value) {
@@ -65,7 +110,7 @@ function toast(message, type = 'ok') {
 }
 
 function buildClientMessage(appointment) {
-  return `Ola, ${appointment.name}! Aqui e a ${business.name}.\n\nAgendamento: ${appointment.code}\nServico: ${appointment.serviceName}\nBarbeiro: ${appointment.barberName}\nData: ${formatDate(appointment.date)}\nHorario: ${appointment.time}\nStatus: ${STATUS[appointment.status].label}`;
+  return `Olá, ${appointment.name}! Aqui é a ${business.name}.\n\nAgendamento: ${appointment.code}\nServiço: ${appointment.serviceName}\nBarbeiro: ${appointment.barberName}\nData: ${formatDate(appointment.date)}\nHorário: ${appointment.time}\nStatus: ${STATUS[appointment.status].label}`;
 }
 
 function filteredAppointments() {
@@ -121,17 +166,17 @@ function renderTable() {
     const status = STATUS[item.status];
     return `
       <tr>
-        <td data-label="Codigo"><strong>${escapeHtml(item.code)}</strong></td>
+        <td data-label="Código"><strong>${escapeHtml(item.code)}</strong></td>
         <td data-label="Cliente">${escapeHtml(item.name)}</td>
         <td data-label="WhatsApp">${escapeHtml(formatPhone(item.phone))}</td>
-        <td data-label="Servico">${escapeHtml(item.serviceName)}</td>
+        <td data-label="Serviço">${escapeHtml(item.serviceName)}</td>
         <td data-label="Barbeiro">${escapeHtml(item.barberName)}</td>
         <td data-label="Data">${escapeHtml(formatDate(item.date))}</td>
-        <td data-label="Horario">${escapeHtml(item.time)}</td>
-        <td data-label="Duracao">${item.durationMinutes ? `${item.durationMinutes} min` : '-'}</td>
+        <td data-label="Horário">${escapeHtml(item.time)}</td>
+        <td data-label="Duração">${item.durationMinutes ? `${item.durationMinutes} min` : '-'}</td>
         <td data-label="Valor">${money(item.price)}</td>
         <td data-label="Status"><span class="status ${status.className}">${status.label}</span></td>
-        <td data-label="Acoes"><div class="actions">${actionButtons(item)}</div></td>
+        <td data-label="Ações"><div class="actions">${actionButtons(item)}</div></td>
       </tr>
     `;
   }).join('');
@@ -157,6 +202,8 @@ function cancelAppointment(id) {
 }
 
 function attachEvents() {
+  if (adminEventsBound) return;
+  adminEventsBound = true;
   ['filter-status', 'filter-date', 'filter-search'].forEach(id => byId(id).addEventListener('input', renderTable));
   byId('clear-filters').addEventListener('click', () => {
     byId('filter-status').value = '';
@@ -174,5 +221,12 @@ function attachEvents() {
   });
 }
 
-attachEvents();
-renderTable();
+byId('admin-login-form').addEventListener('submit', handleAdminLogin);
+byId('admin-logout').addEventListener('click', logoutAdmin);
+if (isAdminAuthenticated()) {
+  showAdminPanel();
+  attachEvents();
+  renderTable();
+} else {
+  showAdminLogin();
+}

@@ -3,14 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Blackline Barbearia | Painel ADM</title>
+    <title>Blackline Barbearia | Painel administrativo</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="admin.css" />
   </head>
   <body>
-    <aside class="sidebar">
+    <section class="admin-login" id="admin-login">
+      <form class="login-card" id="admin-login-form" novalidate>
+        <a class="brand" href="index.html">BLACK<span>LINE</span></a>
+        <p class="eyebrow">Acesso restrito</p>
+        <h1>Painel administrativo</h1>
+        <p>Informe o PIN da equipe para acessar a agenda.</p>
+        <label>
+          PIN administrativo
+          <input id="admin-pin" type="password" inputmode="numeric" autocomplete="current-password" />
+        </label>
+        <div class="form-feedback" id="admin-login-feedback" role="alert"></div>
+        <button class="btn" type="submit">Entrar</button>
+      </form>
+    </section>
+
+    <aside class="sidebar" id="admin-shell" hidden>
       <a class="brand" href="index.html">BLACK<span>LINE</span></a>
       <nav>
         <a class="active" href="#agenda">Agenda</a>
@@ -20,7 +35,7 @@
       <p>Agenda do dia, status e contatos organizados para a equipe.</p>
     </aside>
 
-    <main class="admin-main">
+    <main class="admin-main" id="admin-main" hidden>
       <header class="topbar">
         <div>
           <p class="eyebrow">Painel administrativo</p>
@@ -28,6 +43,7 @@
         </div>
         <div class="topbar-actions">
           <button class="btn" type="button" id="refresh-list">Atualizar</button>
+          <button class="btn subtle" type="button" id="admin-logout">Sair</button>
         </div>
       </header>
 
@@ -35,7 +51,7 @@
         <article class="metric-card"><span>Agendamentos de hoje</span><strong id="metric-today">0</strong></article>
         <article class="metric-card"><span>Faturamento do dia</span><strong id="metric-revenue">R$ 0,00</strong></article>
         <article class="metric-card"><span>Clientes atendidos</span><strong id="metric-clients">0</strong></article>
-        <article class="metric-card"><span>Servico mais vendido</span><strong id="metric-service">-</strong></article>
+        <article class="metric-card"><span>Serviço mais vendido</span><strong id="metric-service">-</strong></article>
         <article class="metric-card"><span>Barbeiro com mais atendimentos</span><strong id="metric-barber">-</strong></article>
       </section>
 
@@ -54,7 +70,7 @@
               <option value="pendente">Pendente</option>
               <option value="confirmado">Confirmado</option>
               <option value="em_atendimento">Em atendimento</option>
-              <option value="concluido">Concluido</option>
+              <option value="concluido">Concluído</option>
               <option value="cancelado">Cancelado</option>
             </select>
           </label>
@@ -67,17 +83,17 @@
           <table>
             <thead>
               <tr>
-                <th>Codigo</th>
+                <th>Código</th>
                 <th>Cliente</th>
                 <th>WhatsApp</th>
-                <th>Servico</th>
+                <th>Serviço</th>
                 <th>Barbeiro</th>
                 <th>Data</th>
-                <th>Horario</th>
-                <th>Duracao</th>
+                <th>Horário</th>
+                <th>Duração</th>
                 <th>Valor</th>
                 <th>Status</th>
-                <th>Acoes</th>
+                <th>Ações</th>
               </tr>
             </thead>
             <tbody id="appointments-body"></tbody>

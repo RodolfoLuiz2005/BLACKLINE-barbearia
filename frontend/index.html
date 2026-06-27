@@ -1,95 +1,186 @@
 <!doctype html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Blackline Barbearia | Agendamento premium</title>
-    <meta name="description" content="Blackline Barbearia em Recife: corte, barba e estilo com atendimento premium. Agende seu horario online." />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
-    <header class="site-header" id="site-header">
-      <a class="brand" href="#inicio" aria-label="Blackline Barbearia">BLACK<span>LINE</span></a>
-      <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Abrir menu">
-        <span></span><span></span><span></span>
-      </button>
-      <nav class="site-nav" id="site-nav" aria-label="Navegacao principal">
-        <a href="#servicos">Servicos</a>
-        <a href="#barbeiros">Barbeiros</a>
-        <a href="#agendamento">Agendamento</a>
-        <a href="#gerenciar">Gerenciar</a>
-        <a href="#avaliacoes">Avaliacoes</a>
-        <a href="#localizacao">Localizacao</a>
-        <a href="admin.html">ADM</a>
-      </nav>
-    </header>
 
-    <main>
-      <section class="hero" id="inicio">
-        <video class="hero-video" autoplay muted loop playsinline poster="" id="hero-video">
-          <source id="hero-video-source" src="" type="video/mp4" />
-        </video>
-        <div class="hero-fallback" id="hero-fallback"></div>
-        <div class="hero-overlay"></div>
-        <div class="hero-content">
-          <p class="eyebrow">Blackline Barbearia</p>
-          <h1>Corte, barba e estilo com atendimento premium</h1>
-          <p class="hero-subtitle">Agende seu horario com barbeiros especialistas.</p>
-          <div class="hero-actions">
-            <a class="btn btn-primary" href="#agendamento">Agendar agora</a>
-            <a class="btn btn-secondary" href="#servicos">Ver servicos</a>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Blackline Barbearia | Corte, barba e estilo premium em Recife</title>
+  <meta name="description"
+    content="Agende seu horário na Blackline Barbearia. Corte degradê, barba completa, corte social e atendimento premium em Recife." />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://blackline-barbearia.vercel.app/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Blackline Barbearia | Corte, barba e estilo premium" />
+  <meta property="og:description"
+    content="Agende seu horário na Blackline Barbearia. Corte degradê, barba completa, corte social e atendimento premium em Recife." />
+  <meta property="og:url" content="https://blackline-barbearia.vercel.app/" />
+  <meta property="og:image" content="https://blackline-barbearia.vercel.app/og-image.jpg" />
+  <meta property="og:image:alt" content="Interior premium da Blackline Barbearia" />
+  <meta property="og:site_name" content="Blackline Barbearia" />
+  <meta property="og:locale" content="pt_BR" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Blackline Barbearia | Corte, barba e estilo premium" />
+  <meta name="twitter:description" content="Agende seu horário com barbeiros especialistas em Recife." />
+  <meta name="twitter:image" content="https://blackline-barbearia.vercel.app/og-image.jpg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script
+    type="application/ld+json">{"@context":"https://schema.org","@type":"HairSalon","name":"Blackline Barbearia","image":"https://blackline-barbearia.vercel.app/og-image.jpg","url":"https://blackline-barbearia.vercel.app/","telephone":"+55 81 99999-9999","priceRange":"$$","address":{"@type":"PostalAddress","streetAddress":"Av. Boa Viagem, 1250 - Boa Viagem","addressLocality":"Recife","addressRegion":"PE","addressCountry":"BR"},"openingHoursSpecification":[{"@type":"OpeningHoursSpecification","dayOfWeek":["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],"opens":"09:00","closes":"20:00"}],"sameAs":["https://www.instagram.com/blacklinebarbearia"],"makesOffer":[{"@type":"Offer","itemOffered":{"@type":"Service","name":"Corte degradê"},"price":"35","priceCurrency":"BRL"},{"@type":"Offer","itemOffered":{"@type":"Service","name":"Corte social"},"price":"30","priceCurrency":"BRL"},{"@type":"Offer","itemOffered":{"@type":"Service","name":"Barba completa"},"price":"25","priceCurrency":"BRL"},{"@type":"Offer","itemOffered":{"@type":"Service","name":"Corte + barba"},"price":"55","priceCurrency":"BRL"},{"@type":"Offer","itemOffered":{"@type":"Service","name":"Sobrancelha"},"price":"15","priceCurrency":"BRL"},{"@type":"Offer","itemOffered":{"@type":"Service","name":"Pigmentação"},"price":"45","priceCurrency":"BRL"}]}</script>
+</head>
+
+<body>
+  <header class="site-header" id="site-header">
+    <a class="brand" href="#inicio" aria-label="Blackline Barbearia">BLACK<span>LINE</span></a>
+    <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Abrir menu">
+      <span></span><span></span><span></span>
+    </button>
+    <nav class="site-nav" id="site-nav" aria-label="Navegacao principal">
+      <a href="#servicos">Serviços</a>
+      <a href="#barbeiros">Barbeiros</a>
+      <a href="#agendamento">Agendamento</a>
+      <a href="#gerenciar">Gerenciar</a>
+      <a href="#avaliacoes">Avaliações</a>
+      <a href="#localizacao">Localização</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" id="inicio">
+      <video class="hero-video" autoplay muted loop playsinline poster="" id="hero-video">
+        <source id="hero-video-source" src="" type="video/mp4" />
+      </video>
+      <div class="hero-fallback" id="hero-fallback"></div>
+      <div class="hero-overlay"></div>
+      <div class="hero-content">
+        <p class="eyebrow">Blackline Barbearia</p>
+        <h1>Corte, barba e estilo com atendimento premium</h1>
+        <p class="hero-subtitle">Agende seu horário com barbeiros especialistas.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#agendamento">Agendar agora</a>
+          <a class="btn btn-secondary" href="#servicos">Ver serviços</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section services-section" id="servicos">
+      <div class="section-heading">
+        <p class="eyebrow">Serviços premium</p>
+        <h2>Escolha o serviço ideal para o seu estilo.</h2>
+        <p>Agende seu horário com nossos barbeiros e chegue no atendimento com tudo definido.</p>
+      </div>
+      <div class="services-grid" id="services-grid">
+        <article class="service-card" style="--delay:0ms">
+          <div class="card-topline"><span>45 min</span><strong>R$ 35,00</strong></div>
+          <h3>Corte degradê</h3>
+          <p>Corte moderno com acabamento navalhado.</p>
+          <a class="ghost-button fallback-link" href="#agendamento">Agendar este serviço</a>
+        </article>
+        <article class="service-card" style="--delay:70ms">
+          <div class="card-topline"><span>40 min</span><strong>R$ 30,00</strong></div>
+          <h3>Corte social</h3>
+          <p>Corte clássico, limpo e alinhado.</p>
+          <a class="ghost-button fallback-link" href="#agendamento">Agendar este serviço</a>
+        </article>
+        <article class="service-card" style="--delay:140ms">
+          <div class="card-topline"><span>30 min</span><strong>R$ 25,00</strong></div>
+          <h3>Barba completa</h3>
+          <p>Barba modelada com toalha quente e finalização.</p>
+          <a class="ghost-button fallback-link" href="#agendamento">Agendar este serviço</a>
+        </article>
+        <article class="service-card" style="--delay:210ms">
+          <div class="card-topline"><span>1h10</span><strong>R$ 55,00</strong></div>
+          <h3>Corte + barba</h3>
+          <p>Combo completo para renovar o visual.</p>
+          <a class="ghost-button fallback-link" href="#agendamento">Agendar este serviço</a>
+        </article>
+        <article class="service-card" style="--delay:280ms">
+          <div class="card-topline"><span>15 min</span><strong>R$ 15,00</strong></div>
+          <h3>Sobrancelha</h3>
+          <p>Design simples para acabamento do rosto.</p>
+          <a class="ghost-button fallback-link" href="#agendamento">Agendar este serviço</a>
+        </article>
+        <article class="service-card" style="--delay:350ms">
+          <div class="card-topline"><span>40 min</span><strong>R$ 45,00</strong></div>
+          <h3>Pigmentação</h3>
+          <p>Pigmentação capilar ou de barba com acabamento natural.</p>
+          <a class="ghost-button fallback-link" href="#agendamento">Agendar este serviço</a>
+        </article>
+      </div>
+    </section>
+
+    <section class="section barbers-section" id="barbeiros">
+      <div class="section-heading">
+        <p class="eyebrow">Equipe</p>
+        <h2>Nossos barbeiros</h2>
+        <p>Especialistas em degradê, corte social, barba alinhada e acabamentos de presença.</p>
+      </div>
+      <div class="barbers-grid" id="barbers-grid">
+        <article class="barber-card" style="--delay:0ms">
+          <img src="https://images.unsplash.com/photo-1618077360395-f3068be8e001?q=80&w=900&auto=format&fit=crop"
+            alt="Rafael Lima, barbeiro da Blackline" loading="lazy" />
+          <div>
+            <h3>Rafael Lima</h3>
+            <p>Especialista em degradê e navalhado</p>
+            <span>Segunda a sábado</span>
+            <a class="ghost-button fallback-link" href="#agendamento">Agendar com este barbeiro</a>
           </div>
-        </div>
-      </section>
+        </article>
+        <article class="barber-card" style="--delay:90ms">
+          <img src="https://images.unsplash.com/photo-1582893561942-d61adcb2e534?q=80&w=900&auto=format&fit=crop"
+            alt="Marcos Silva, barbeiro da Blackline" loading="lazy" />
+          <div>
+            <h3>Marcos Silva</h3>
+            <p>Barba, corte clássico e social</p>
+            <span>Terça a sábado</span>
+            <a class="ghost-button fallback-link" href="#agendamento">Agendar com este barbeiro</a>
+          </div>
+        </article>
+        <article class="barber-card" style="--delay:180ms">
+          <img src="https://images.unsplash.com/photo-1621605815971-fbc98d665033?q=80&w=900&auto=format&fit=crop"
+            alt="André Costa, barbeiro da Blackline" loading="lazy" />
+          <div>
+            <h3>André Costa</h3>
+            <p>Corte moderno, freestyle e pigmentação</p>
+            <span>Quarta a sábado</span>
+            <a class="ghost-button fallback-link" href="#agendamento">Agendar com este barbeiro</a>
+          </div>
+        </article>
+      </div>
+    </section>
 
-      <section class="section services-section" id="servicos">
-        <div class="section-heading">
-          <p class="eyebrow">Servicos</p>
-          <h2>Escolha o servico ideal para o seu estilo.</h2>
-          <p>Agende seu horario com nossos barbeiros e chegue no atendimento com tudo definido.</p>
-        </div>
-        <div class="services-grid" id="services-grid"></div>
-      </section>
+    <section class="booking-section" id="agendamento">
+      <div class="booking-intro">
+        <p class="eyebrow">Atendimento com hora marcada</p>
+        <h2>Reserve seu horário em poucos passos.</h2>
+        <p>Escolha serviço, barbeiro, data e horário. No final, você recebe um código para acompanhar seu atendimento.
+        </p>
+      </div>
 
-      <section class="section barbers-section" id="barbeiros">
-        <div class="section-heading">
-          <p class="eyebrow">Equipe</p>
-          <h2>Nossos barbeiros</h2>
-          <p>Especialistas em degrade, corte social, barba alinhada e acabamentos de presenca.</p>
-        </div>
-        <div class="barbers-grid" id="barbers-grid"></div>
-      </section>
-
-      <section class="booking-section" id="agendamento">
-        <div class="booking-intro">
+      <form class="booking-card booking-flow booking-slider" id="booking-form" novalidate>
+        <div class="booking-card-header">
           <p class="eyebrow">Agendamento</p>
-          <h2>Reserve seu horario em poucos passos.</h2>
-          <p>Escolha servico, barbeiro, data e horario. No final, voce recebe um codigo para acompanhar seu atendimento.</p>
+          <h3>Agende seu horário</h3>
+          <p>Avance etapa por etapa até confirmar seu atendimento.</p>
         </div>
 
-        <form class="booking-card booking-flow" id="booking-form" novalidate>
-          <div class="booking-card-header">
-            <p class="eyebrow">Agendamento</p>
-            <h3>Agende seu horario</h3>
-            <p>Escolha o servico, barbeiro, data e horario.</p>
-          </div>
+        <div class="booking-steps" aria-label="Etapas do agendamento">
+          <span class="active" data-step-indicator="0">1 Serviço</span>
+          <span data-step-indicator="1">2 Barbeiro</span>
+          <span data-step-indicator="2">3 Data</span>
+          <span data-step-indicator="3">4 Horário</span>
+          <span data-step-indicator="4">5 Dados</span>
+          <span data-step-indicator="5">6 Confirmar</span>
+        </div>
 
-          <div class="booking-steps" aria-label="Etapas do agendamento">
-            <span class="active">1 Servico</span>
-            <span>2 Barbeiro</span>
-            <span>3 Data</span>
-            <span>4 Horario</span>
-            <span>5 Dados</span>
-          </div>
-
-          <div class="form-grid booking-flow-grid">
-            <section class="booking-choice full" aria-labelledby="service-choice-title">
+        <div class="booking-slider-viewport">
+          <div class="booking-slider-track" id="booking-slider-track" style="--booking-step:0">
+            <section class="booking-slide booking-choice" aria-labelledby="service-choice-title" data-booking-step="0">
               <div class="picker-heading compact">
                 <div>
-                  <span id="service-choice-title">Servico</span>
+                  <span id="service-choice-title">Serviço</span>
                   <strong>Escolha o atendimento.</strong>
                 </div>
               </div>
@@ -97,7 +188,7 @@
               <div class="booking-service-options" id="booking-service-options"></div>
             </section>
 
-            <section class="booking-choice full" aria-labelledby="barber-choice-title">
+            <section class="booking-slide booking-choice" id="barber-picker-panel" aria-labelledby="barber-choice-title" data-booking-step="1">
               <div class="picker-heading compact">
                 <div>
                   <span id="barber-choice-title">Barbeiro</span>
@@ -106,47 +197,51 @@
               </div>
               <select id="booking-barber" name="barber" hidden></select>
               <div class="booking-barber-options" id="booking-barber-options"></div>
+              <div class="step-actions">
+                <button class="btn btn-secondary" type="button" data-step-prev>Voltar</button>
+              </div>
             </section>
 
-            <section class="visual-picker mini-date-picker full" aria-labelledby="date-picker-title">
+            <section class="booking-slide visual-picker mini-date-picker" id="date-picker-panel" aria-labelledby="date-picker-title" data-booking-step="2">
               <div class="picker-heading compact">
                 <div>
                   <span id="date-picker-title">Data</span>
-                  <strong id="selected-day-label">Escolha servico e barbeiro para liberar a data.</strong>
+                  <strong id="selected-day-label">Escolha serviço e barbeiro para liberar a data.</strong>
                 </div>
               </div>
               <input id="booking-date" name="date" type="hidden" />
-              <button class="btn btn-secondary mini-calendar-trigger" id="calendar-toggle" type="button" disabled>Escolher data</button>
-              <div class="mini-calendar" id="mini-calendar" hidden>
+              <div class="mini-calendar" id="mini-calendar">
                 <div class="mini-calendar-top">
-                  <button type="button" id="calendar-prev" aria-label="Mes anterior">&lsaquo;</button>
+                  <button type="button" id="calendar-prev" aria-label="Mês anterior">&lsaquo;</button>
                   <strong id="calendar-month-label"></strong>
-                  <button type="button" id="calendar-next" aria-label="Proximo mes">&rsaquo;</button>
+                  <button type="button" id="calendar-next" aria-label="Próximo mês">&rsaquo;</button>
                 </div>
                 <div class="calendar-weekdays" aria-hidden="true">
-                  <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sab</span>
+                  <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
                 </div>
                 <div class="calendar-days" id="calendar-days"></div>
               </div>
+              <button class="btn btn-secondary mini-calendar-trigger" id="calendar-toggle" type="button" hidden>Escolher data</button>
+              <div class="step-actions">
+                <button class="btn btn-secondary" type="button" data-step-prev>Voltar</button>
+              </div>
             </section>
 
-            <section class="visual-picker full" id="time-picker-panel" aria-labelledby="time-picker-title" hidden>
+            <section class="booking-slide visual-picker" id="time-picker-panel" aria-labelledby="time-picker-title" data-booking-step="3">
               <div class="picker-heading compact">
                 <div>
-                  <span id="time-picker-title">Horario</span>
-                  <strong id="selected-time-label">Selecione uma data para ver os horarios.</strong>
+                  <span id="time-picker-title">Horário</span>
+                  <strong id="selected-time-label">Selecione uma data para ver os horários.</strong>
                 </div>
               </div>
               <input id="booking-time" name="time" type="hidden" />
-              <div class="time-groups" id="time-groups" aria-label="Horarios disponiveis"></div>
+              <div class="time-groups" id="time-groups" aria-label="Horários disponíveis"></div>
+              <div class="step-actions">
+                <button class="btn btn-secondary" type="button" data-step-prev>Voltar</button>
+              </div>
             </section>
 
-            <aside class="booking-summary full" id="booking-summary" aria-live="polite" hidden>
-              <span>Resumo</span>
-              <p>Escolha um horario para revisar antes de confirmar.</p>
-            </aside>
-
-            <section class="client-details full" id="client-details" hidden>
+            <section class="booking-slide client-details" id="client-details" data-booking-step="4">
               <div class="picker-heading compact">
                 <div>
                   <span>Seus dados</span>
@@ -163,124 +258,164 @@
                   <input id="client-phone" name="phone" type="tel" inputmode="numeric" autocomplete="tel" />
                 </label>
                 <label class="full">
-                  Observacao opcional
+                  Observação opcional
                   <textarea id="booking-note" name="note" rows="3"></textarea>
                 </label>
               </div>
+              <div class="step-actions">
+                <button class="btn btn-secondary" type="button" data-step-prev>Voltar</button>
+                <button class="btn btn-primary" type="button" id="customer-continue" disabled>Continuar</button>
+              </div>
+            </section>
+
+            <section class="booking-slide booking-confirmation" data-booking-step="5" aria-labelledby="confirmation-title">
+              <div class="picker-heading compact">
+                <div>
+                  <span id="confirmation-title">Confirmar</span>
+                  <strong>Revise os detalhes antes de confirmar.</strong>
+                </div>
+              </div>
+              <aside class="booking-summary" id="booking-summary" aria-live="polite">
+                <span>Resumo do agendamento</span>
+                <p>Preencha as etapas anteriores para revisar antes de confirmar.</p>
+              </aside>
+              <div class="step-actions">
+                <button class="btn btn-secondary" type="button" data-step-prev>Voltar</button>
+                <button class="btn btn-primary btn-submit" id="booking-submit" type="submit" disabled>Confirmar agendamento</button>
+              </div>
             </section>
           </div>
+        </div>
 
-          <div class="form-feedback" id="form-feedback" role="alert"></div>
-          <button class="btn btn-primary btn-submit" id="booking-submit" type="submit" hidden>Confirmar agendamento</button>
+        <div class="form-feedback" id="form-feedback" role="alert"></div>
+      </form>
+
+      <div class="booking-modal" id="success-card" hidden>
+        <div class="success-card success-modal-card" role="dialog" aria-modal="true" aria-labelledby="success-title">
+          <div class="success-icon">&check;</div>
+          <p class="eyebrow">Agendamento confirmado</p>
+          <h3 id="success-title">Agendamento confirmado</h3>
+          <strong class="success-code" id="success-code"></strong>
+          <div class="success-details" id="success-details"></div>
+          <div class="success-actions">
+            <button class="btn btn-secondary" type="button" id="success-copy">Copiar código</button>
+            <a class="btn btn-primary" id="success-whatsapp" target="_blank" rel="noopener">Enviar no WhatsApp</a>
+            <a class="btn btn-secondary" id="success-manage" href="#gerenciar">Acompanhar agendamento</a>
+            <button class="btn btn-secondary" type="button" id="success-close">Fechar</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section manage-section" id="gerenciar">
+      <div class="section-heading">
+        <p class="eyebrow">Meu horário</p>
+        <h2>Consulte ou ajuste seu agendamento.</h2>
+        <p>Use seu WhatsApp e o código recebido para conferir status, remarcar ou cancelar.</p>
+      </div>
+      <div class="manage-layout">
+        <form class="manage-card" id="manage-form" novalidate>
+          <div class="form-grid">
+            <label>
+              WhatsApp *
+              <input id="manage-phone" type="tel" inputmode="numeric" autocomplete="tel" />
+            </label>
+            <label>
+              Código *
+              <input id="manage-code" type="text" />
+            </label>
+          </div>
+          <div class="form-feedback" id="manage-feedback" role="alert"></div>
+          <button class="btn btn-primary btn-submit" type="submit">Consultar agendamento</button>
         </form>
 
-        <div class="booking-modal" id="success-card" hidden>
-          <div class="success-card success-modal-card" role="dialog" aria-modal="true" aria-labelledby="success-title">
-            <div class="success-icon">✓</div>
-            <p class="eyebrow">Agendamento confirmado</p>
-            <h3 id="success-title">Agendamento confirmado</h3>
-            <strong class="success-code" id="success-code"></strong>
-            <div class="success-details" id="success-details"></div>
-            <div class="success-actions">
-              <button class="btn btn-secondary" type="button" id="success-copy">Copiar codigo</button>
-              <a class="btn btn-primary" id="success-whatsapp" target="_blank" rel="noopener">Enviar no WhatsApp</a>
-              <a class="btn btn-secondary" id="success-manage" href="#gerenciar">Acompanhar agendamento</a>
-              <button class="btn btn-secondary" type="button" id="success-close">Fechar</button>
-            </div>
+        <article class="manage-result" id="manage-result" hidden>
+          <div id="manage-details"></div>
+          <div class="manage-actions">
+            <button class="btn btn-secondary" type="button" id="manage-reschedule-toggle">Reagendar</button>
+            <button class="btn danger-btn" type="button" id="manage-cancel">Cancelar</button>
           </div>
-        </div>
-      </section>
-
-      <section class="section manage-section" id="gerenciar">
-        <div class="section-heading">
-          <p class="eyebrow">Meu horario</p>
-          <h2>Consulte ou ajuste seu agendamento.</h2>
-          <p>Use seu WhatsApp e o codigo recebido para conferir status, remarcar ou cancelar.</p>
-        </div>
-        <div class="manage-layout">
-          <form class="manage-card" id="manage-form" novalidate>
+          <form class="reschedule-box" id="reschedule-form" hidden>
             <div class="form-grid">
               <label>
-                WhatsApp *
-                <input id="manage-phone" type="tel" inputmode="numeric" autocomplete="tel" />
+                Novo barbeiro *
+                <select id="reschedule-barber"></select>
               </label>
               <label>
-                Codigo *
-                <input id="manage-code" type="text" />
+                Nova data *
+                <input id="reschedule-date" type="date" />
+              </label>
+              <label class="full">
+                Novo horário *
+                <select id="reschedule-time"></select>
               </label>
             </div>
-            <div class="form-feedback" id="manage-feedback" role="alert"></div>
-            <button class="btn btn-primary btn-submit" type="submit">Consultar agendamento</button>
+            <div class="form-feedback" id="reschedule-feedback"></div>
+            <button class="btn btn-primary btn-submit" type="submit">Salvar reagendamento</button>
           </form>
+        </article>
+      </div>
+    </section>
 
-          <article class="manage-result" id="manage-result" hidden>
-            <div id="manage-details"></div>
-            <div class="manage-actions">
-              <button class="btn btn-secondary" type="button" id="manage-reschedule-toggle">Reagendar</button>
-              <button class="btn danger-btn" type="button" id="manage-cancel">Cancelar</button>
-            </div>
-            <form class="reschedule-box" id="reschedule-form" hidden>
-              <div class="form-grid">
-                <label>
-                  Novo barbeiro *
-                  <select id="reschedule-barber"></select>
-                </label>
-                <label>
-                  Nova data *
-                  <input id="reschedule-date" type="date" />
-                </label>
-                <label class="full">
-                  Novo horario *
-                  <select id="reschedule-time"></select>
-                </label>
-              </div>
-              <div class="form-feedback" id="reschedule-feedback"></div>
-              <button class="btn btn-primary btn-submit" type="submit">Salvar reagendamento</button>
-            </form>
-          </article>
-        </div>
-      </section>
+    <section class="section testimonials-section" id="avaliacoes">
+      <div class="section-heading">
+        <p class="eyebrow">Experiência dos clientes</p>
+        <h2>O que nossos clientes dizem</h2>
+        <p>A experiência de quem ja passou pela BLACKLINE.</p>
+      </div>
+      <div class="testimonials-grid" id="testimonials-grid"></div>
+      <div class="review-actions">
+        <a class="btn btn-secondary" id="google-reviews" target="_blank" rel="noopener">Ver avaliações no Google</a>
+        <a class="btn btn-primary" id="google-review" target="_blank" rel="noopener">Avaliar no Google</a>
+      </div>
+    </section>
 
-      <section class="section testimonials-section" id="avaliacoes">
-        <div class="section-heading">
-          <p class="eyebrow">Avaliacoes</p>
-          <h2>O que nossos clientes dizem</h2>
-          <p>A experiencia de quem ja passou pela BLACKLINE.</p>
-        </div>
-        <div class="testimonials-grid" id="testimonials-grid"></div>
-        <div class="review-actions">
-          <a class="btn btn-secondary" id="google-reviews" target="_blank" rel="noopener">Ver avaliacoes no Google</a>
-          <a class="btn btn-primary" id="google-review" target="_blank" rel="noopener">Avaliar no Google</a>
-        </div>
-      </section>
-
-      <section class="section location-section" id="localizacao">
-        <div class="section-heading location-heading">
-          <p class="eyebrow">Localizacao</p>
-          <h2>Atendimento em Recife, com hora marcada.</h2>
-          <p>Estamos em Boa Viagem, com facil acesso e uma agenda organizada para voce nao perder tempo.</p>
-        </div>
-        <div class="location-panel">
-          <div>
-            <h3 id="business-name">Blackline Barbearia</h3>
-            <div class="contact-list">
-              <p><strong>Endereco</strong><span id="business-address"></span></p>
-              <p><strong>Horario</strong><span id="business-hours"></span></p>
-              <p><strong>WhatsApp</strong><span id="business-phone"></span></p>
-              <p><strong>Instagram</strong><a id="business-instagram" target="_blank" rel="noopener"></a></p>
-            </div>
+    <section class="section location-section" id="localizacao">
+      <div class="section-heading location-heading">
+        <p class="eyebrow">Onde estamos</p>
+        <h2>Atendimento em Recife, com hora marcada.</h2>
+        <p>Estamos em Boa Viagem, com fácil acesso e uma agenda organizada para você nao perder tempo.</p>
+      </div>
+      <div class="location-panel">
+        <div>
+          <h3 id="business-name">Blackline Barbearia</h3>
+          <div class="contact-list">
+            <p><strong>Endereço</strong><span id="business-address">Av. Boa Viagem, 1250 - Boa Viagem, Recife -
+                PE</span></p>
+            <p><strong>Horário</strong><span id="business-hours">Segunda a sábado, das 09h às 20h</span></p>
+            <p><strong>WhatsApp</strong><span id="business-phone">(81) 99999-9999</span></p>
+            <p><strong>Instagram</strong><a id="business-instagram" href="https://www.instagram.com/blacklinebarbearia"
+                target="_blank" rel="noopener">@blacklinebarbearia</a></p>
           </div>
-          <iframe id="business-map" title="Mapa da Blackline Barbearia" loading="lazy"></iframe>
         </div>
-      </section>
-    </main>
+        <iframe id="business-map" title="Mapa da Blackline Barbearia" loading="lazy"
+          src="https://www.google.com/maps?q=Av.%20Boa%20Viagem%201250%20Recife%20PE&output=embed"></iframe>
+      </div>
+    </section>
+  </main>
 
-    <a class="floating-whatsapp" id="floating-whatsapp" target="_blank" rel="noopener" aria-label="WhatsApp">WA</a>
+  <a class="floating-whatsapp" id="floating-whatsapp" target="_blank" rel="noopener" aria-label="WhatsApp">WA</a>
 
-    <footer class="site-footer">
-      <p>Â© 2026 Blackline Barbearia. Atendimento premium, agenda organizada e estilo no detalhe.</p>
-    </footer>
+  <footer class="site-footer">
+    <p>&copy; 2026 Blackline Barbearia. Todos os direitos reservados.</p>
+  </footer>
 
-    <script type="module" src="script.js"></script>
-  </body>
+  <noscript>
+    <section class="noscript-fallback" aria-label="Informações essenciais da Blackline Barbearia">
+      <h2>Blackline Barbearia</h2>
+      <p>Corte, barba e estilo premium em Recife.</p>
+      <p><strong>WhatsApp:</strong> (81) 99999-9999</p>
+      <p><strong>Endereço:</strong> Av. Boa Viagem, 1250 - Boa Viagem, Recife - PE</p>
+      <p><strong>Horário:</strong> Segunda a sábado, das 09h às 20h</p>
+      <ul>
+        <li>Corte degradê - R$ 35</li>
+        <li>Corte social - R$ 30</li>
+        <li>Barba completa - R$ 25</li>
+        <li>Corte + barba - R$ 55</li>
+      </ul>
+    </section>
+  </noscript>
+  <script type="module" src="script.js"></script>
+</body>
+
 </html>

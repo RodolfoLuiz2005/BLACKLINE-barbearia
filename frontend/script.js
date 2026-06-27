@@ -5,11 +5,14 @@ const statusLabels = {
   pendente: 'Pendente',
   confirmado: 'Confirmado',
   em_atendimento: 'Em atendimento',
-  concluido: 'Concluido',
+  concluido: 'Concluído',
   cancelado: 'Cancelado'
 };
+const BOOKING_BLOCKING_STATUSES = new Set(['pendente', 'confirmado', 'em_atendimento']);
 
 let managedAppointmentId = '';
+let currentStep = 0;
+const BOOKING_STEP_COUNT = 6;
 let calendarCursor = new Date();
 calendarCursor.setDate(1);
 calendarCursor.setHours(12, 0, 0, 0);
@@ -152,7 +155,7 @@ function getScheduleSlots(dateValue, barberId) {
 function getBookedSlots(dateValue, barberId, ignoreId = '') {
   const booked = new Set();
   loadAppointments()
-    .filter(item => item.id !== ignoreId && item.date === dateValue && item.barberId === barberId && item.status !== 'cancelado')
+    .filter(item => item.id !== ignoreId && item.date === dateValue && item.barberId === barberId && BOOKING_BLOCKING_STATUSES.has(item.status || 'pendente'))
     .forEach(item => {
       const service = services.find(serviceItem => serviceItem.id === item.serviceId);
       const slotsCount = calculateServiceSlots(service || { durationMinutes: item.durationMinutes || schedule.intervalMinutes });
@@ -207,7 +210,7 @@ function getNextAvailableDays(daysCount = 7) {
       monthShort: MONTHS_SHORT[date.getMonth()],
       monthLong: MONTHS_LONG[date.getMonth()],
       available: open && slots.length > 0,
-      availabilityText: open && slots.length > 0 ? slots.length + ' livres' : 'Sem horarios'
+      availabilityText: open && slots.length > 0 ? slots.length + ' livres' : 'Sem horários'
     };
   });
 }
@@ -287,7 +290,7 @@ function renderServices() {
       </div>
       <h3>${escapeHtml(service.name)}</h3>
       <p>${escapeHtml(service.description)}</p>
-      <button class="ghost-button" type="button" data-service="${escapeHtml(service.id)}">Agendar este servico</button>
+      <button class="ghost-button" type="button" data-service="${escapeHtml(service.id)}">Agendar este serviço</button>
     </article>
   `).join('');
 }
@@ -317,7 +320,7 @@ function renderTestimonials() {
 }
 
 function serviceOptions(selected = '') {
-  return '<option value="">Escolha o servico</option>' + services
+  return '<option value="">Escolha o serviço</option>' + services
     .map(service => `<option value="${escapeHtml(service.id)}" ${service.id === selected ? 'selected' : ''}>${escapeHtml(service.name)} - ${money(service.price)}</option>`)
     .join('');
 }
@@ -358,8 +361,8 @@ function setMinDate() {
 }
 
 function fillTimeSelect(select, slots) {
-  select.innerHTML = '<option value="">Escolha o horario</option>' + slots.map(time => `<option value="${time}">${time}</option>`).join('');
-  if (!slots.length) select.innerHTML = '<option value="">Sem horarios disponiveis</option>';
+  select.innerHTML = '<option value="">Escolha o horário</option>' + slots.map(time => `<option value="${time}">${time}</option>`).join('');
+  if (!slots.length) select.innerHTML = '<option value="">Sem horários disponiveis</option>';
 }
 
 function clearSelectedDateTime() {
@@ -367,8 +370,8 @@ function clearSelectedDateTime() {
   byId('booking-time').value = '';
   byId('selected-day-label').textContent = byId('booking-service').value && byId('booking-barber').value
     ? 'Clique em Escolher data.'
-    : 'Escolha servico e barbeiro para liberar a data.';
-  byId('selected-time-label').textContent = 'Selecione uma data para ver os horarios.';
+    : 'Escolha serviço e barbeiro para liberar a data.';
+  byId('selected-time-label').textContent = 'Selecione uma data para ver os horários.';
 }
 
 function hasAvailableTimes(dateValue, barberId) {
@@ -401,10 +404,11 @@ function renderMiniCalendar() {
   byId('calendar-prev').disabled = calendarCursor <= new Date(new Date().getFullYear(), new Date().getMonth(), 1, 12, 0, 0, 0);
 
   if (!unlocked) {
-    daysWrapper.innerHTML = '<p class="picker-empty calendar-empty">Escolha servico e barbeiro.</p>';
+    daysWrapper.innerHTML = '<p class="picker-empty calendar-empty">Escolha serviço e barbeiro.</p>';
     calendar.hidden = true;
     return;
   }
+  calendar.hidden = false;
 
   const firstDay = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth(), 1, 12, 0, 0, 0);
   const lastDay = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() + 1, 0, 12, 0, 0, 0);
@@ -442,25 +446,27 @@ function openMiniCalendar() {
 }
 
 function closeMiniCalendar() {
-  byId('mini-calendar').hidden = true;
+  const calendar = byId('mini-calendar');
+  if (calendar && !calendar.closest('.booking-slide')) calendar.hidden = true;
 }
 
 function selectDate(dateValue) {
   const barberId = byId('booking-barber').value;
   if (!isDateAvailable(dateValue, barberId)) {
-    showScheduleToast('Esta data nao possui horarios livres.', 'error');
+    showScheduleToast('Esta data não possui horários livres.', 'error');
     return;
   }
   byId('booking-date').value = dateValue;
   byId('booking-time').value = '';
   byId('selected-day-label').textContent = longDateLabel(dateValue);
-  byId('selected-time-label').textContent = 'Escolha um horario disponivel.';
+  byId('selected-time-label').textContent = 'Escolha um horário disponível.';
   closeMiniCalendar();
   renderMiniCalendar();
   renderTimeGroups();
   updateBookingVisibility();
   updateSteps();
   updateScheduleSummary();
+  window.setTimeout(() => goToStep(3), 200);
 }
 
 function slotButtonMarkup(slot, dateValue, selectedDate, selectedTime) {
@@ -501,8 +507,55 @@ function renderTimeGroups() {
   }
 
   const barber = barbers.find(item => item.id === barberId);
-  wrapper.innerHTML = '<div class="time-context"><strong>Horarios disponiveis para ' + escapeHtml(barber?.name || 'o barbeiro') + '</strong><span>' + escapeHtml(longDateLabel(selectedDate)) + '</span></div>'
+  wrapper.innerHTML = '<div class="time-context"><strong>Horários disponíveis para ' + escapeHtml(barber?.name || 'o barbeiro') + '</strong><span>' + escapeHtml(longDateLabel(selectedDate)) + '</span></div>'
     + renderAvailableTimes(selectedDate, barberId, selectedTime);
+}
+
+function customerDataReady() {
+  return byId('client-name').value.trim().split(/\s+/).filter(Boolean).length >= 2
+    && onlyDigits(byId('client-phone').value).length === 11;
+}
+
+function canAccessStep(step) {
+  if (step <= 0) return true;
+  if (step === 1) return Boolean(byId('booking-service').value);
+  if (step === 2) return Boolean(byId('booking-service').value && byId('booking-barber').value);
+  if (step === 3) return Boolean(byId('booking-service').value && byId('booking-barber').value && byId('booking-date').value);
+  if (step === 4) return Boolean(byId('booking-service').value && byId('booking-barber').value && byId('booking-date').value && byId('booking-time').value);
+  if (step === 5) return canAccessStep(4) && customerDataReady();
+  return false;
+}
+
+function updateSliderHeight() {
+  const viewport = byId('booking-slider-viewport');
+  const activeSlide = document.querySelector('[data-booking-step].is-active');
+  if (!viewport || !activeSlide) return;
+  viewport.style.height = activeSlide.offsetHeight + 'px';
+}
+
+function goToStep(step) {
+  const target = Math.max(0, Math.min(BOOKING_STEP_COUNT - 1, step));
+  if (!canAccessStep(target)) return;
+  currentStep = target;
+  const track = byId('booking-slider-track');
+  if (track) track.style.setProperty('--booking-step', String(currentStep));
+  document.querySelectorAll('[data-booking-step]').forEach(slide => {
+    const active = Number(slide.dataset.bookingStep) === currentStep;
+    slide.classList.toggle('is-active', active);
+    slide.setAttribute('aria-hidden', active ? 'false' : 'true');
+  });
+  updateSteps();
+  updateBookingVisibility();
+  updateScheduleSummary();
+  window.requestAnimationFrame(updateSliderHeight);
+}
+
+function nextStep() {
+  goToStep(currentStep + 1);
+}
+
+function prevStep() {
+  goToStep(currentStep - 1);
 }
 
 function updateBookingVisibility() {
@@ -510,11 +563,11 @@ function updateBookingVisibility() {
   const barberSelected = Boolean(byId('booking-barber').value);
   const dateSelected = Boolean(byId('booking-date').value);
   const timeSelected = Boolean(byId('booking-time').value);
+  const clientReady = customerDataReady();
+
   byId('calendar-toggle').disabled = !(serviceSelected && barberSelected);
-  byId('time-picker-panel').hidden = !dateSelected;
-  byId('client-details').hidden = !timeSelected;
-  byId('booking-summary').hidden = !timeSelected;
-  byId('booking-submit').hidden = !timeSelected;
+  byId('customer-continue').disabled = !clientReady;
+  byId('booking-submit').disabled = !(timeSelected && clientReady);
 }
 
 function showScheduleToast(message, type = 'ok') {
@@ -535,19 +588,20 @@ function selectScheduleSlot(dateValue, time) {
   const barberId = byId('booking-barber').value;
   const service = getSelectedService();
   if (!isSlotAvailable(dateValue, barberId, time, service)) {
-    showScheduleToast('Horario ocupado ou indisponivel para este servico.', 'error');
+    showScheduleToast('Horário ocupado ou indisponível para este serviço.', 'error');
     return;
   }
   byId('booking-date').value = dateValue;
   byId('booking-time').value = time;
   byId('selected-day-label').textContent = longDateLabel(dateValue);
-  byId('selected-time-label').textContent = 'Horario selecionado: ' + time;
+  byId('selected-time-label').textContent = 'Horário selecionado: ' + time;
   renderMiniCalendar();
   renderTimeGroups();
   updateBookingVisibility();
   updateSteps();
   updateScheduleSummary();
-  showScheduleToast('Horario selecionado: ' + time);
+  showScheduleToast('Horário selecionado: ' + time);
+  window.setTimeout(() => goToStep(4), 200);
 }
 
 function selectTime(time) {
@@ -596,60 +650,71 @@ function updateSelectedCards() {
 }
 
 function selectService(id) {
+  const changed = byId('booking-service').value !== id;
   byId('booking-service').value = id;
-  clearSelectedDateTime();
+  if (changed) clearSelectedDateTime();
   closeMiniCalendar();
   updateSelectedCards();
   updateTimes();
   scrollToBooking();
   updateSteps();
+  window.setTimeout(() => goToStep(1), 200);
 }
 
 function selectBarber(id) {
+  const changed = byId('booking-barber').value !== id;
   byId('booking-barber').value = id;
-  clearSelectedDateTime();
+  if (changed) clearSelectedDateTime();
   closeMiniCalendar();
   updateSelectedCards();
   updateTimes();
   scrollToBooking();
   updateSteps();
+  window.setTimeout(() => goToStep(2), 200);
 }
 
-function updateScheduleSummary() {
+function renderConfirmationSummary() {
   const service = services.find(item => item.id === byId('booking-service').value);
   const barber = barbers.find(item => item.id === byId('booking-barber').value);
   const date = byId('booking-date').value;
   const time = byId('booking-time').value;
-  const summary = byId('booking-summary');
-
-  if (!time) {
-    summary.innerHTML = '<span>Resumo</span><p>Escolha um horario para revisar antes de confirmar.</p>';
-    return;
+  const name = byId('client-name').value.trim();
+  const phone = onlyDigits(byId('client-phone').value);
+  if (!service || !barber || !date || !time) {
+    return '<span>Resumo do agendamento</span><p>Complete as etapas anteriores para revisar antes de confirmar.</p>';
   }
+  return '<span>Resumo do agendamento</span><dl>'
+    + '<div><dt>Serviço</dt><dd>' + escapeHtml(service.name) + '</dd></div>'
+    + '<div><dt>Barbeiro</dt><dd>' + escapeHtml(barber.name) + '</dd></div>'
+    + '<div><dt>Data</dt><dd>' + escapeHtml(longDateLabel(date)) + '</dd></div>'
+    + '<div><dt>Horário</dt><dd>' + escapeHtml(time) + '</dd></div>'
+    + '<div><dt>Duração</dt><dd>' + escapeHtml(service.duration) + '</dd></div>'
+    + '<div><dt>Valor</dt><dd>' + money(service.price) + '</dd></div>'
+    + '<div><dt>Cliente</dt><dd>' + escapeHtml(name || '-') + '</dd></div>'
+    + '<div><dt>WhatsApp</dt><dd>' + escapeHtml(phone ? formatPhone(phone) : '-') + '</dd></div>'
+    + '</dl>';
+}
 
-  summary.innerHTML = '<span>Resumo</span><div class="summary-compact">'
-    + '<strong>' + escapeHtml(service?.name || '-') + '</strong>'
-    + '<p>' + escapeHtml(barber?.name || '-') + '</p>'
-    + '<p>' + escapeHtml(date ? longDateLabel(date) : '-') + ' as ' + escapeHtml(time || '-') + '</p>'
-    + '<em>' + (service ? money(service.price) : '-') + '</em>'
-    + '</div>';
+function updateScheduleSummary() {
+  const summary = byId('booking-summary');
+  if (!summary) return;
+  summary.innerHTML = renderConfirmationSummary();
 }
 
 function updateSteps() {
   const steps = [...document.querySelectorAll('.booking-steps span')];
-  const filled = [
-    byId('booking-service').value,
-    byId('booking-barber').value,
-    byId('booking-date').value,
-    byId('booking-time').value,
-    byId('client-name').value.trim() && byId('client-phone').value.trim()
+  const completed = [
+    Boolean(byId('booking-service').value),
+    Boolean(byId('booking-barber').value),
+    Boolean(byId('booking-date').value),
+    Boolean(byId('booking-time').value),
+    customerDataReady(),
+    customerDataReady() && Boolean(byId('booking-time').value)
   ];
-  let current = filled.findIndex(item => !item);
-  if (current === -1) current = steps.length - 1;
   steps.forEach((step, index) => {
-    step.classList.toggle('done', index < current || (current === steps.length - 1 && filled[index]));
-    step.classList.toggle('current', index === current);
-    step.classList.toggle('active', index <= current);
+    step.classList.toggle('done', index < currentStep && completed[index]);
+    step.classList.toggle('current', index === currentStep);
+    step.classList.toggle('active', index <= currentStep);
   });
 }
 
@@ -657,23 +722,23 @@ function validateBooking(payload) {
   const errors = [];
   if (payload.name.trim().split(/\s+/).filter(Boolean).length < 2) errors.push('Informe nome e sobrenome.');
   if (onlyDigits(payload.phone).length !== 11) errors.push('Informe um WhatsApp valido com DDD.');
-  if (!payload.serviceId) errors.push('Escolha um servico.');
+  if (!payload.serviceId) errors.push('Escolha um serviço.');
   if (!payload.barberId) errors.push('Escolha um barbeiro.');
   if (!payload.date || !isDateOpen(payload.date, payload.barberId)) errors.push('Escolha uma data disponivel.');
   if (!payload.time) {
-    errors.push('Escolha um horario.');
-    showScheduleToast('Escolha um horario livre na agenda.', 'error');
+    errors.push('Escolha um horário.');
+    showScheduleToast('Escolha um horário livre na agenda.', 'error');
   }
   return errors;
 }
 
 function buildWhatsappMessage(appointment) {
-  return `Ola, quero confirmar meu agendamento na ${business.name}.\n\nNome: ${appointment.name}\nServico: ${appointment.serviceName}\nBarbeiro: ${appointment.barberName}\nData: ${formatDate(appointment.date)}\nHorario: ${appointment.time}\nCodigo: ${appointment.code}`;
+  return `Olá, quero confirmar meu agendamento na ${business.name}.\n\nNome: ${appointment.name}\nServiço: ${appointment.serviceName}\nBarbeiro: ${appointment.barberName}\nData: ${formatDate(appointment.date)}\nHorário: ${appointment.time}\nCódigo: ${appointment.code}`;
 }
 
 function renderSuccess(appointment) {
   byId('success-title').textContent = 'Agendamento confirmado';
-  byId('success-code').textContent = 'Codigo: ' + appointment.code;
+  byId('success-code').textContent = 'Código: ' + appointment.code;
   byId('success-details').innerHTML = appointmentDetails(appointment);
   byId('success-whatsapp').href = whatsappLink(business.whatsapp, buildWhatsappMessage(appointment));
   byId('success-card').hidden = false;
@@ -686,12 +751,12 @@ function closeSuccessModal() {
 }
 
 async function copySuccessCode() {
-  const code = byId('success-code').textContent.replace('Codigo: ', '').trim();
+  const code = byId('success-code').textContent.replace('Código: ', '').trim();
   try {
     await navigator.clipboard.writeText(code);
-    showScheduleToast('Codigo copiado.');
+    showScheduleToast('Código copiado.');
   } catch {
-    showScheduleToast('Codigo: ' + code);
+    showScheduleToast('Código: ' + code);
   }
 }
 
@@ -705,13 +770,13 @@ function prepareManageFromSuccess() {
 
 function appointmentDetails(appointment) {
   return `
-    <p><span>Codigo</span><strong>${escapeHtml(appointment.code)}</strong></p>
+    <p><span>Código</span><strong>${escapeHtml(appointment.code)}</strong></p>
     <p><span>Cliente</span><strong>${escapeHtml(appointment.name)}</strong></p>
     <p><span>WhatsApp</span><strong>${escapeHtml(formatPhone(appointment.phone))}</strong></p>
-    <p><span>Servico</span><strong>${escapeHtml(appointment.serviceName)}</strong></p>
+    <p><span>Serviço</span><strong>${escapeHtml(appointment.serviceName)}</strong></p>
     <p><span>Barbeiro</span><strong>${escapeHtml(appointment.barberName)}</strong></p>
     <p><span>Data</span><strong>${escapeHtml(formatDate(appointment.date))} as ${escapeHtml(appointment.time)}</strong></p>
-    <p><span>Duracao</span><strong>${escapeHtml(appointment.durationMinutes ? appointment.durationMinutes + ' min' : '-')}</strong></p>
+    <p><span>Duração</span><strong>${escapeHtml(appointment.durationMinutes ? appointment.durationMinutes + ' min' : '-')}</strong></p>
     <p><span>Valor</span><strong>${money(appointment.price)}</strong></p>
     <p><span>Status</span><strong>${escapeHtml(statusLabels[appointment.status] || appointment.status)}</strong></p>
     ${appointment.note ? `<p><span>Observacao</span><strong>${escapeHtml(appointment.note)}</strong></p>` : ''}
@@ -749,9 +814,9 @@ function submitBooking(event) {
   }
 
   if (!isSlotAvailable(payload.date, payload.barberId, payload.time, service)) {
-    feedback.textContent = 'Este horario ficou ocupado ou nao comporta a duracao do servico. Escolha outro horario.';
+    feedback.textContent = 'Este horario ficou ocupado ou não comporta a duração do serviço. Escolha outro horário.';
     feedback.className = 'form-feedback error';
-    showScheduleToast('Escolha outro horario disponivel.', 'error');
+    showScheduleToast('Escolha outro horário disponível.', 'error');
     updateTimes();
     return;
   }
@@ -767,7 +832,7 @@ function submitBooking(event) {
   updateSelectedCards();
   updateTimes();
   updateBookingVisibility();
-  updateSteps();
+  goToStep(0);
   renderSuccess(payload);
 }
 
@@ -828,14 +893,14 @@ function submitReschedule(event) {
   const feedback = byId('reschedule-feedback');
 
   if (!barber || !date || !time || !isDateOpen(date, barber.id)) {
-    feedback.textContent = 'Escolha barbeiro, data e horario disponiveis.';
+    feedback.textContent = 'Escolha barbeiro, data e horário disponíveis.';
     feedback.className = 'form-feedback error';
     return;
   }
 
   const service = services.find(item => item.id === appointment.serviceId);
   if (!isSlotAvailable(date, barber.id, time, service, appointment.id)) {
-    feedback.textContent = 'Este horario ficou ocupado ou nao comporta a duracao do servico. Escolha outro horario.';
+    feedback.textContent = 'Este horario ficou ocupado ou não comporta a duração do serviço. Escolha outro horário.';
     feedback.className = 'form-feedback error';
     updateRescheduleTimes();
     return;
@@ -861,7 +926,7 @@ function renderBusiness() {
   byId('business-instagram').textContent = business.instagram.replace('https://www.instagram.com/', '@').replace(/\/$/, '');
   byId('business-instagram').href = business.instagram;
   byId('business-map').src = business.mapEmbed;
-  byId('floating-whatsapp').href = whatsappLink(business.whatsapp, `Ola, quero agendar um horario na ${business.name}.`);
+  byId('floating-whatsapp').href = whatsappLink(business.whatsapp, `Olá, quero agendar um horario na ${business.name}.`);
   byId('google-reviews').href = business.googleReviewsUrl;
   byId('google-review').href = business.googleReviewsUrl;
 }
@@ -878,6 +943,7 @@ function attachEvents() {
   byId('menu-toggle').addEventListener('click', () => byId('site-nav').classList.toggle('open'));
   document.querySelectorAll('.site-nav a').forEach(link => link.addEventListener('click', () => byId('site-nav').classList.remove('open')));
   window.addEventListener('scroll', () => byId('site-header').classList.toggle('scrolled', window.scrollY > 24));
+  window.addEventListener('resize', updateSliderHeight);
   document.addEventListener('click', event => {
     const serviceButton = event.target.closest('[data-service]');
     const barberButton = event.target.closest('[data-barber]');
@@ -889,11 +955,11 @@ function attachEvents() {
     if (bookingBarberButton) selectBarber(bookingBarberButton.dataset.bookingBarber);
   });
   ['booking-service', 'booking-barber', 'client-name', 'client-phone'].forEach(id => {
-    byId(id).addEventListener('input', updateSteps);
-    byId(id).addEventListener('change', updateSteps);
+    byId(id).addEventListener('input', () => { updateSteps(); updateBookingVisibility(); updateScheduleSummary(); });
+    byId(id).addEventListener('change', () => { updateSteps(); updateBookingVisibility(); updateScheduleSummary(); });
   });
-  byId('booking-service').addEventListener('change', () => { clearSelectedDateTime(); closeMiniCalendar(); updateSelectedCards(); updateTimes(); updateSteps(); });
-  byId('booking-barber').addEventListener('change', () => { clearSelectedDateTime(); closeMiniCalendar(); updateSelectedCards(); updateTimes(); updateSteps(); });
+  byId('booking-service').addEventListener('change', () => { clearSelectedDateTime(); closeMiniCalendar(); updateSelectedCards(); updateTimes(); updateSteps(); updateBookingVisibility(); });
+  byId('booking-barber').addEventListener('change', () => { clearSelectedDateTime(); closeMiniCalendar(); updateSelectedCards(); updateTimes(); updateSteps(); updateBookingVisibility(); });
   byId('calendar-toggle').addEventListener('click', openMiniCalendar);
   byId('calendar-prev').addEventListener('click', () => {
     calendarCursor.setMonth(calendarCursor.getMonth() - 1);
@@ -911,9 +977,17 @@ function attachEvents() {
     if (!event.target.closest('.mini-date-picker')) closeMiniCalendar();
   });
   byId('time-groups').addEventListener('click', event => { const slot = event.target.closest('[data-time]'); if (slot && !slot.disabled) selectScheduleSlot(slot.dataset.date, slot.dataset.time); });
-  byId('client-phone').addEventListener('input', maskPhoneInput);
+  byId('client-phone').addEventListener('input', event => { maskPhoneInput(event); updateSteps(); updateBookingVisibility(); updateScheduleSummary(); });
   byId('manage-phone').addEventListener('input', maskPhoneInput);
   byId('manage-code').addEventListener('input', event => { event.target.value = normalizeCode(event.target.value); });
+  document.querySelectorAll('[data-step-prev]').forEach(button => button.addEventListener('click', prevStep));
+  byId('customer-continue').addEventListener('click', () => {
+    if (!customerDataReady()) {
+      showScheduleToast('Informe nome e WhatsApp para continuar.', 'error');
+      return;
+    }
+    goToStep(5);
+  });
   byId('booking-form').addEventListener('submit', submitBooking);
   byId('success-close').addEventListener('click', closeSuccessModal);
   byId('success-copy').addEventListener('click', copySuccessCode);
@@ -950,6 +1024,7 @@ function init() {
   updateScheduleSummary();
   updateTimes();
   updateBookingVisibility();
+  goToStep(0);
   updateRescheduleTimes();
   attachEvents();
   initReveal();
