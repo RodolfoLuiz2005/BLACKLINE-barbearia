@@ -108,7 +108,6 @@ function actionButtons(item) {
   if (item.status !== 'concluido' && item.status !== 'cancelado') parts.push(`<button data-action="status" data-id="${id}" data-status="concluido">Concluir</button>`);
   if (item.status !== 'cancelado' && item.status !== 'concluido') parts.push(`<button data-action="cancel" data-id="${id}">Cancelar</button>`);
   parts.push(`<a href="${whatsappLink(item.phone, buildClientMessage(item))}" target="_blank" rel="noopener">WhatsApp</a>`);
-  parts.push(`<button data-action="delete" data-id="${id}" class="danger">Excluir</button>`);
   return parts.join('');
 }
 
@@ -155,42 +154,6 @@ function cancelAppointment(id) {
   updateStatus(id, 'cancelado');
 }
 
-function deleteAppointment(id) {
-  if (!confirm('Excluir este agendamento definitivamente?')) return;
-  saveAppointments(loadAppointments().filter(item => item.id !== id));
-  renderTable();
-  toast('Agendamento excluido.');
-}
-
-function seedDemo() {
-  const rows = loadAppointments();
-  if (rows.length && !confirm('Ja existem agendamentos. Adicionar mais exemplos?')) return;
-  const today = todayISO();
-  const examples = [
-    ['Joao Pereira', '81999990001', services[0], barbers[0], today, '09:00', 'confirmado'],
-    ['Carlos Mendes', '81999990002', services[3], barbers[1], today, '10:30', 'pendente'],
-    ['Bruno Alves', '81999990003', services[2], barbers[2], today, '14:00', 'concluido']
-  ].map((row, index) => ({
-    id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${index}`,
-    code: `BLK-${new Date().getFullYear()}-D${index + 1}`,
-    name: row[0],
-    phone: row[1],
-    serviceId: row[2].id,
-    serviceName: row[2].name,
-    barberId: row[3].id,
-    barberName: row[3].name,
-    date: row[4],
-    time: row[5],
-    note: 'Agendamento de demonstracao.',
-    price: row[2].price,
-    status: row[6],
-    createdAt: new Date().toISOString()
-  }));
-  saveAppointments([...rows, ...examples]);
-  renderTable();
-  toast('Exemplos criados no painel.');
-}
-
 function attachEvents() {
   ['filter-status', 'filter-date', 'filter-search'].forEach(id => byId(id).addEventListener('input', renderTable));
   byId('clear-filters').addEventListener('click', () => {
@@ -200,16 +163,17 @@ function attachEvents() {
     renderTable();
   });
   byId('refresh-list').addEventListener('click', () => { renderTable(); toast('Painel atualizado.'); });
-  byId('seed-demo').addEventListener('click', seedDemo);
   byId('appointments-body').addEventListener('click', event => {
     const target = event.target.closest('[data-action]');
     if (!target) return;
     const { action, id, status } = target.dataset;
     if (action === 'status') updateStatus(id, status);
     if (action === 'cancel') cancelAppointment(id);
-    if (action === 'delete') deleteAppointment(id);
   });
 }
 
 attachEvents();
 renderTable();
+
+
+
