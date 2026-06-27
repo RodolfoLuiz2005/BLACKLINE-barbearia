@@ -10,6 +10,9 @@ const statusLabels = {
 };
 
 let managedAppointmentId = '';
+let calendarCursor = new Date();
+calendarCursor.setDate(1);
+calendarCursor.setHours(12, 0, 0, 0);
 const WEEKDAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
 const WEEKDAYS_LONG = ['Domingo', 'Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta', 'Sabado'];
 const MONTHS_SHORT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -97,17 +100,34 @@ function isPastSlot(dateValue, timeValue) {
   return slotDate.getTime() < Date.now();
 }
 
-function isDateOpen(dateValue, barberId = '') {
-  if (!dateValue) return false;
-  const date = new Date(`${dateValue}T12:00:00`);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (Number.isNaN(date.getTime()) || date < today) return false;
+function localIsoDate(date) {
+  return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+}
 
+function startOfLocalDay(date = new Date()) {
+  const value = new Date(date);
+  value.setHours(0, 0, 0, 0);
+  return value;
+}
+
+function getBarberAvailability(barberId) {
+  const barber = barbers.find(item => item.id === barberId);
+  return {
+    availableWeekDays: barber?.availableWeekDays || schedule.openDays,
+    unavailableDates: barber?.unavailableDates || []
+  };
+}
+
+function isDateOpen(dateValue, barberId = '') {
+  if (!dateValue || !barberId) return false;
+  const date = new Date(dateValue + 'T12:00:00');
+  if (Number.isNaN(date.getTime()) || startOfLocalDay(date) < startOfLocalDay()) return false;
+
+  const availability = getBarberAvailability(barberId);
   const day = date.getDay();
   if (!schedule.openDays.includes(day)) return false;
-  if (barberId === 'marcos-silva' && day === 1) return false;
-  if (barberId === 'andre-costa' && [1, 2].includes(day)) return false;
+  if (!availability.availableWeekDays.includes(day)) return false;
+  if (availability.unavailableDates.includes(dateValue)) return false;
   return true;
 }
 
@@ -163,8 +183,8 @@ function isSlotAvailable(dateValue, barberId, timeValue, service = getSelectedSe
   return true;
 }
 
-function availableTimes(dateValue, barberId, ignoreId = '') {
-  const service = getSelectedService();
+function availableTimes(dateValue, barberId, ignoreId = '', serviceOverride = null) {
+  const service = serviceOverride || getSelectedService();
   return getScheduleSlots(dateValue, barberId).filter(time => isSlotAvailable(dateValue, barberId, time, service, ignoreId));
 }
 
@@ -175,7 +195,7 @@ function getNextAvailableDays(daysCount = 7) {
     const date = new Date();
     date.setDate(date.getDate() + index);
     date.setHours(12, 0, 0, 0);
-    const iso = date.toISOString().slice(0, 10);
+    const iso = localIsoDate(date);
     const unlocked = Boolean(serviceId && barberId);
     const open = unlocked && isDateOpen(iso, barberId);
     const slots = open ? availableTimes(iso, barberId) : [];
@@ -308,10 +328,27 @@ function barberOptions(selected = '') {
     .join('');
 }
 
+function renderBookingServiceCards() {
+  byId('booking-service-options').innerHTML = services.map(service => '<button class="booking-option service-option" type="button" data-booking-service="' + escapeHtml(service.id) + '">'
+    + '<strong>' + escapeHtml(service.name) + '</strong>'
+    + '<span>' + escapeHtml(service.duration) + ' &bull; ' + money(service.price) + '</span>'
+    + '</button>').join('');
+}
+
+function renderBookingBarberCards() {
+  byId('booking-barber-options').innerHTML = barbers.map(barber => '<button class="booking-option barber-option" type="button" data-booking-barber="' + escapeHtml(barber.id) + '">'
+    + '<img src="' + escapeHtml(barber.photo || assets.barberFallback) + '" alt="' + escapeHtml(barber.name) + '" loading="lazy" onerror="this.src=\'' + escapeHtml(assets.barberFallback) + '\'">'
+    + '<strong>' + escapeHtml(barber.name) + '</strong>'
+    + '<p>' + escapeHtml(barber.specialty) + '</p>'
+    + '</button>').join('');
+}
+
 function renderSelects() {
   byId('booking-service').innerHTML = serviceOptions();
   byId('booking-barber').innerHTML = barberOptions();
   byId('reschedule-barber').innerHTML = barberOptions();
+  renderBookingServiceCards();
+  renderBookingBarberCards();
 }
 
 function setMinDate() {
@@ -328,101 +365,156 @@ function fillTimeSelect(select, slots) {
 function clearSelectedDateTime() {
   byId('booking-date').value = '';
   byId('booking-time').value = '';
-  byId('selected-day-label').textContent = 'Escolha uma data disponivel';
-  byId('selected-time-label').textContent = 'Selecione um dia para ver os horarios';
+  byId('selected-day-label').textContent = byId('booking-service').value && byId('booking-barber').value
+    ? 'Clique em Escolher data.'
+    : 'Escolha servico e barbeiro para liberar a data.';
+  byId('selected-time-label').textContent = 'Selecione uma data para ver os horarios.';
 }
 
-function renderDayStrip() {
-  const strip = byId('day-strip');
+function hasAvailableTimes(dateValue, barberId) {
+  return availableTimes(dateValue, barberId).length > 0;
+}
+
+function isDateAvailable(dateValue, barberId) {
+  return Boolean(byId('booking-service').value && barberId && isDateOpen(dateValue, barberId) && hasAvailableTimes(dateValue, barberId));
+}
+
+function calendarMonthLabel(date) {
+  return MONTHS_LONG[date.getMonth()] + ' de ' + date.getFullYear();
+}
+
+function setCalendarCursorFromDate(dateValue = '') {
+  const base = dateValue ? new Date(dateValue + 'T12:00:00') : new Date();
+  calendarCursor = new Date(base.getFullYear(), base.getMonth(), 1, 12, 0, 0, 0);
+}
+
+function renderMiniCalendar() {
+  const calendar = byId('mini-calendar');
+  const daysWrapper = byId('calendar-days');
   const serviceId = byId('booking-service').value;
   const barberId = byId('booking-barber').value;
   const selectedDate = byId('booking-date').value;
-  const days = getNextAvailableDays();
+  const unlocked = Boolean(serviceId && barberId);
 
-  strip.innerHTML = days.map(day => {
-    const selected = selectedDate === day.iso;
-    const disabled = !serviceId || !barberId || !day.available;
-    return '<button class="day-card ' + (selected ? 'is-selected ' : '') + (disabled ? 'is-disabled' : '') + '" type="button" data-date="' + escapeHtml(day.iso) + '" ' + (disabled ? 'disabled' : '') + '>'
-      + '<span>' + escapeHtml(day.weekdayShort) + '</span>'
-      + '<strong>' + escapeHtml(day.dayNumber) + '</strong>'
-      + '<small>' + escapeHtml(day.monthShort) + '</small>'
-      + '<em>' + escapeHtml(day.availabilityText) + '</em>'
-      + '</button>';
-  }).join('');
+  byId('calendar-toggle').disabled = !unlocked;
+  byId('calendar-month-label').textContent = calendarMonthLabel(calendarCursor);
+  byId('calendar-prev').disabled = calendarCursor <= new Date(new Date().getFullYear(), new Date().getMonth(), 1, 12, 0, 0, 0);
 
-  if (!serviceId || !barberId) {
-    byId('selected-day-label').textContent = 'Escolha servico e barbeiro para ver a agenda semanal';
-  } else if (selectedDate) {
-    byId('selected-day-label').textContent = 'Dia selecionado: ' + longDateLabel(selectedDate);
-  } else {
-    byId('selected-day-label').textContent = 'Escolha um dia disponivel na agenda';
+  if (!unlocked) {
+    daysWrapper.innerHTML = '<p class="picker-empty calendar-empty">Escolha servico e barbeiro.</p>';
+    calendar.hidden = true;
+    return;
   }
+
+  const firstDay = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth(), 1, 12, 0, 0, 0);
+  const lastDay = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() + 1, 0, 12, 0, 0, 0);
+  const todayIso = localIsoDate(new Date());
+  const cells = [];
+
+  for (let index = 0; index < firstDay.getDay(); index += 1) {
+    cells.push('<span class="calendar-day-spacer" aria-hidden="true"></span>');
+  }
+
+  for (let dayNumber = 1; dayNumber <= lastDay.getDate(); dayNumber += 1) {
+    const date = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth(), dayNumber, 12, 0, 0, 0);
+    const iso = localIsoDate(date);
+    const selected = iso === selectedDate;
+    const today = iso === todayIso;
+    const available = isDateAvailable(iso, barberId);
+    const label = available ? 'Disponivel' : 'Indisponivel';
+    cells.push('<button class="calendar-day ' + (selected ? 'is-selected ' : '') + (today ? 'is-today ' : '') + (!available ? 'is-disabled' : '') + '" type="button" data-calendar-date="' + escapeHtml(iso) + '" ' + (!available ? 'disabled' : '') + ' aria-label="' + escapeHtml(longDateLabel(iso) + ' - ' + label) + '">'
+      + '<strong>' + dayNumber + '</strong>'
+      + '<span>' + label + '</span>'
+      + '</button>');
+  }
+
+  daysWrapper.innerHTML = cells.join('');
 }
 
-function selectDay(dateValue) {
-  if (!dateValue || !isDateOpen(dateValue, byId('booking-barber').value)) return;
+function openMiniCalendar() {
+  if (!byId('booking-service').value || !byId('booking-barber').value) {
+    showScheduleToast('Escolha um barbeiro antes de selecionar a data.', 'error');
+    return;
+  }
+  setCalendarCursorFromDate(byId('booking-date').value);
+  renderMiniCalendar();
+  byId('mini-calendar').hidden = !byId('mini-calendar').hidden;
+}
+
+function closeMiniCalendar() {
+  byId('mini-calendar').hidden = true;
+}
+
+function selectDate(dateValue) {
+  const barberId = byId('booking-barber').value;
+  if (!isDateAvailable(dateValue, barberId)) {
+    showScheduleToast('Esta data nao possui horarios livres.', 'error');
+    return;
+  }
   byId('booking-date').value = dateValue;
   byId('booking-time').value = '';
-  byId('selected-day-label').textContent = 'Dia selecionado: ' + longDateLabel(dateValue);
-  byId('selected-time-label').textContent = 'Escolha um horario disponivel';
-  renderDayStrip();
+  byId('selected-day-label').textContent = longDateLabel(dateValue);
+  byId('selected-time-label').textContent = 'Escolha um horario disponivel.';
+  closeMiniCalendar();
+  renderMiniCalendar();
   renderTimeGroups();
+  updateBookingVisibility();
   updateSteps();
   updateScheduleSummary();
 }
 
-function slotButtonMarkup(slot, dateValue, selectedDate, selectedTime, extraClass = '') {
+function slotButtonMarkup(slot, dateValue, selectedDate, selectedTime) {
   const selected = selectedDate === dateValue && selectedTime === slot.time;
-  return '<button class="schedule-slot ' + extraClass + ' ' + (selected ? 'is-selected ' : '') + (!slot.available ? 'is-disabled' : '') + '" type="button" data-date="' + escapeHtml(dateValue) + '" data-time="' + escapeHtml(slot.time) + '" ' + (!slot.available ? 'disabled' : '') + '>'
+  return '<button class="schedule-slot ' + (selected ? 'is-selected ' : '') + '" type="button" data-date="' + escapeHtml(dateValue) + '" data-time="' + escapeHtml(slot.time) + '">'
     + '<strong>' + escapeHtml(slot.time) + '</strong>'
-    + '<span>' + escapeHtml(slot.status) + '</span>'
     + '</button>';
 }
 
-function renderWeeklyCalendar(days, barberId, selectedDate, selectedTime) {
-  const allTimes = Array.from(new Set(days.flatMap(day => getScheduleSlots(day.iso, barberId))));
-  if (!allTimes.length) return '<p class="picker-empty">Nenhum horario disponivel para este barbeiro nesta semana.</p>';
-
-  return '<div class="weekly-calendar" style="--day-count:' + days.length + '">'
-    + '<div class="week-head time-axis">Horario</div>'
-    + days.map(day => '<div class="week-head ' + (day.iso === selectedDate ? 'is-selected' : '') + '"><span>' + escapeHtml(day.weekdayShort) + '</span><strong>' + escapeHtml(day.dayNumber) + '</strong><small>' + escapeHtml(day.monthShort) + '</small><em>' + escapeHtml(day.availabilityText) + '</em></div>').join('')
-    + allTimes.map(time => '<div class="week-time">' + escapeHtml(time) + '</div>'
-      + days.map(day => {
-        const slot = getTimeSlotsByDay(day.iso, barberId).find(item => item.time === time) || { time, available: false, status: 'Indisponivel' };
-        return '<div class="week-cell">' + slotButtonMarkup(slot, day.iso, selectedDate, selectedTime, 'week-slot') + '</div>';
-      }).join('')).join('')
-    + '</div>';
-}
-
-function renderMobileDayAgenda(dateValue, barberId, selectedDate, selectedTime) {
-  if (!dateValue) return '<div class="mobile-day-agenda"><p class="picker-empty">Escolha um dia acima para ver a agenda do dia.</p></div>';
+function renderAvailableTimes(dateValue, barberId, selectedTime) {
   const groups = groupedSlots(dateValue, barberId);
   const periods = ['Manha', 'Tarde', 'Noite'];
   const content = periods.map(period => {
-    const slots = groups[period] || [];
+    const slots = (groups[period] || []).filter(slot => slot.available);
     if (!slots.length) return '';
-    return '<section class="time-period"><h4>' + period + '</h4><div class="day-agenda-list">'
-      + slots.map(slot => slotButtonMarkup(slot, dateValue, selectedDate, selectedTime, 'agenda-slot')).join('')
+    return '<section class="time-period"><h4>' + period + '</h4><div class="time-grid">'
+      + slots.map(slot => slotButtonMarkup(slot, dateValue, dateValue, selectedTime)).join('')
       + '</div></section>';
   }).join('');
-  return '<div class="mobile-day-agenda">' + (content || '<p class="picker-empty">Nenhum horario disponivel para este barbeiro neste dia.</p>') + '</div>';
+
+  return content || '<p class="picker-empty">Nenhum horario livre para esta data.</p>';
 }
 
 function renderTimeGroups() {
   const wrapper = byId('time-groups');
-  const serviceId = byId('booking-service').value;
   const barberId = byId('booking-barber').value;
   const selectedDate = byId('booking-date').value;
   const selectedTime = byId('booking-time').value;
 
-  if (!serviceId || !barberId) {
-    wrapper.innerHTML = '<p class="picker-empty">Escolha servico e barbeiro para liberar a agenda.</p>';
+  if (!byId('booking-service').value || !barberId) {
+    wrapper.innerHTML = '';
     return;
   }
 
-  const days = getNextAvailableDays();
-  wrapper.innerHTML = renderWeeklyCalendar(days, barberId, selectedDate, selectedTime)
-    + renderMobileDayAgenda(selectedDate, barberId, selectedDate, selectedTime);
+  if (!selectedDate) {
+    wrapper.innerHTML = '';
+    return;
+  }
+
+  const barber = barbers.find(item => item.id === barberId);
+  wrapper.innerHTML = '<div class="time-context"><strong>Horarios disponiveis para ' + escapeHtml(barber?.name || 'o barbeiro') + '</strong><span>' + escapeHtml(longDateLabel(selectedDate)) + '</span></div>'
+    + renderAvailableTimes(selectedDate, barberId, selectedTime);
+}
+
+function updateBookingVisibility() {
+  const serviceSelected = Boolean(byId('booking-service').value);
+  const barberSelected = Boolean(byId('booking-barber').value);
+  const dateSelected = Boolean(byId('booking-date').value);
+  const timeSelected = Boolean(byId('booking-time').value);
+  byId('calendar-toggle').disabled = !(serviceSelected && barberSelected);
+  byId('time-picker-panel').hidden = !dateSelected;
+  byId('client-details').hidden = !timeSelected;
+  byId('booking-summary').hidden = !timeSelected;
+  byId('booking-submit').hidden = !timeSelected;
 }
 
 function showScheduleToast(message, type = 'ok') {
@@ -448,10 +540,11 @@ function selectScheduleSlot(dateValue, time) {
   }
   byId('booking-date').value = dateValue;
   byId('booking-time').value = time;
-  byId('selected-day-label').textContent = 'Dia selecionado: ' + longDateLabel(dateValue);
+  byId('selected-day-label').textContent = longDateLabel(dateValue);
   byId('selected-time-label').textContent = 'Horario selecionado: ' + time;
-  renderDayStrip();
+  renderMiniCalendar();
   renderTimeGroups();
+  updateBookingVisibility();
   updateSteps();
   updateScheduleSummary();
   showScheduleToast('Horario selecionado: ' + time);
@@ -465,12 +558,13 @@ function updateTimes() {
   const wrapper = byId('time-groups');
   const date = byId('booking-date').value;
   const barberId = byId('booking-barber').value;
-  if (date && !isDateOpen(date, barberId)) {
+  if (date && !isDateAvailable(date, barberId)) {
     clearSelectedDateTime();
   }
   wrapper.classList.add('is-recalculating');
-  renderDayStrip();
+  renderMiniCalendar();
   renderTimeGroups();
+  updateBookingVisibility();
   updateScheduleSummary();
   window.setTimeout(() => wrapper.classList.remove('is-recalculating'), 180);
 }
@@ -483,7 +577,9 @@ function updateRescheduleTimes() {
     select.innerHTML = '<option value="">Escolha barbeiro e data primeiro</option>';
     return;
   }
-  fillTimeSelect(select, availableTimes(date, barberId, managedAppointmentId));
+  const appointment = getAppointment(managedAppointmentId);
+  const service = services.find(item => item.id === appointment?.serviceId);
+  fillTimeSelect(select, availableTimes(date, barberId, managedAppointmentId, service));
 }
 
 function scrollToBooking() {
@@ -495,11 +591,14 @@ function updateSelectedCards() {
   const barberId = byId('booking-barber').value;
   document.querySelectorAll('[data-service]').forEach(card => card.closest('.service-card')?.classList.toggle('is-selected', card.dataset.service === serviceId));
   document.querySelectorAll('[data-barber]').forEach(card => card.closest('.barber-card')?.classList.toggle('is-selected', card.dataset.barber === barberId));
+  document.querySelectorAll('[data-booking-service]').forEach(card => card.classList.toggle('is-selected', card.dataset.bookingService === serviceId));
+  document.querySelectorAll('[data-booking-barber]').forEach(card => card.classList.toggle('is-selected', card.dataset.bookingBarber === barberId));
 }
 
 function selectService(id) {
   byId('booking-service').value = id;
   clearSelectedDateTime();
+  closeMiniCalendar();
   updateSelectedCards();
   updateTimes();
   scrollToBooking();
@@ -509,6 +608,7 @@ function selectService(id) {
 function selectBarber(id) {
   byId('booking-barber').value = id;
   clearSelectedDateTime();
+  closeMiniCalendar();
   updateSelectedCards();
   updateTimes();
   scrollToBooking();
@@ -522,18 +622,17 @@ function updateScheduleSummary() {
   const time = byId('booking-time').value;
   const summary = byId('booking-summary');
 
-  if (!service && !barber && !date && !time) {
-    summary.innerHTML = '<span>Resumo do agendamento</span><p>Escolha servico, barbeiro, data e horario para revisar antes de confirmar.</p>';
+  if (!time) {
+    summary.innerHTML = '<span>Resumo</span><p>Escolha um horario para revisar antes de confirmar.</p>';
     return;
   }
 
-  summary.innerHTML = '<span>Resumo do agendamento</span><dl>'
-    + '<div><dt>Servico</dt><dd>' + escapeHtml(service?.name || '-') + '</dd></div>'
-    + '<div><dt>Barbeiro</dt><dd>' + escapeHtml(barber?.name || '-') + '</dd></div>'
-    + '<div><dt>Data</dt><dd>' + escapeHtml(date ? longDateLabel(date) : '-') + '</dd></div>'
-    + '<div><dt>Horario</dt><dd>' + escapeHtml(time || '-') + '</dd></div>'
-    + '<div><dt>Valor</dt><dd>' + (service ? money(service.price) : '-') + '</dd></div>'
-    + '</dl>';
+  summary.innerHTML = '<span>Resumo</span><div class="summary-compact">'
+    + '<strong>' + escapeHtml(service?.name || '-') + '</strong>'
+    + '<p>' + escapeHtml(barber?.name || '-') + '</p>'
+    + '<p>' + escapeHtml(date ? longDateLabel(date) : '-') + ' as ' + escapeHtml(time || '-') + '</p>'
+    + '<em>' + (service ? money(service.price) : '-') + '</em>'
+    + '</div>';
 }
 
 function updateSteps() {
@@ -541,7 +640,8 @@ function updateSteps() {
   const filled = [
     byId('booking-service').value,
     byId('booking-barber').value,
-    byId('booking-date').value && byId('booking-time').value,
+    byId('booking-date').value,
+    byId('booking-time').value,
     byId('client-name').value.trim() && byId('client-phone').value.trim()
   ];
   let current = filled.findIndex(item => !item);
@@ -572,11 +672,35 @@ function buildWhatsappMessage(appointment) {
 }
 
 function renderSuccess(appointment) {
-  byId('success-title').textContent = `${appointment.code} criado com sucesso`;
+  byId('success-title').textContent = 'Agendamento confirmado';
+  byId('success-code').textContent = 'Codigo: ' + appointment.code;
   byId('success-details').innerHTML = appointmentDetails(appointment);
   byId('success-whatsapp').href = whatsappLink(business.whatsapp, buildWhatsappMessage(appointment));
   byId('success-card').hidden = false;
-  byId('success-card').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  document.body.style.overflow = 'hidden';
+}
+
+function closeSuccessModal() {
+  byId('success-card').hidden = true;
+  document.body.style.overflow = '';
+}
+
+async function copySuccessCode() {
+  const code = byId('success-code').textContent.replace('Codigo: ', '').trim();
+  try {
+    await navigator.clipboard.writeText(code);
+    showScheduleToast('Codigo copiado.');
+  } catch {
+    showScheduleToast('Codigo: ' + code);
+  }
+}
+
+function prepareManageFromSuccess() {
+  const last = loadAppointments().slice(-1)[0];
+  if (!last) return;
+  byId('manage-phone').value = formatPhone(last.phone);
+  byId('manage-code').value = last.code;
+  closeSuccessModal();
 }
 
 function appointmentDetails(appointment) {
@@ -587,6 +711,7 @@ function appointmentDetails(appointment) {
     <p><span>Servico</span><strong>${escapeHtml(appointment.serviceName)}</strong></p>
     <p><span>Barbeiro</span><strong>${escapeHtml(appointment.barberName)}</strong></p>
     <p><span>Data</span><strong>${escapeHtml(formatDate(appointment.date))} as ${escapeHtml(appointment.time)}</strong></p>
+    <p><span>Duracao</span><strong>${escapeHtml(appointment.durationMinutes ? appointment.durationMinutes + ' min' : '-')}</strong></p>
     <p><span>Valor</span><strong>${money(appointment.price)}</strong></p>
     <p><span>Status</span><strong>${escapeHtml(statusLabels[appointment.status] || appointment.status)}</strong></p>
     ${appointment.note ? `<p><span>Observacao</span><strong>${escapeHtml(appointment.note)}</strong></p>` : ''}
@@ -638,8 +763,10 @@ function submitBooking(event) {
   feedback.className = 'form-feedback ok';
   event.target.reset();
   clearSelectedDateTime();
+  closeMiniCalendar();
   updateSelectedCards();
   updateTimes();
+  updateBookingVisibility();
   updateSteps();
   renderSuccess(payload);
 }
@@ -706,9 +833,9 @@ function submitReschedule(event) {
     return;
   }
 
-  const alreadyTaken = loadAppointments().some(item => item.id !== appointment.id && item.date === date && item.time === time && item.barberId === barber.id && item.status !== 'cancelado');
-  if (alreadyTaken) {
-    feedback.textContent = 'Este horario acabou de ser reservado. Escolha outro horario.';
+  const service = services.find(item => item.id === appointment.serviceId);
+  if (!isSlotAvailable(date, barber.id, time, service, appointment.id)) {
+    feedback.textContent = 'Este horario ficou ocupado ou nao comporta a duracao do servico. Escolha outro horario.';
     feedback.className = 'form-feedback error';
     updateRescheduleTimes();
     return;
@@ -754,21 +881,43 @@ function attachEvents() {
   document.addEventListener('click', event => {
     const serviceButton = event.target.closest('[data-service]');
     const barberButton = event.target.closest('[data-barber]');
+    const bookingServiceButton = event.target.closest('[data-booking-service]');
+    const bookingBarberButton = event.target.closest('[data-booking-barber]');
     if (serviceButton) selectService(serviceButton.dataset.service);
     if (barberButton) selectBarber(barberButton.dataset.barber);
+    if (bookingServiceButton) selectService(bookingServiceButton.dataset.bookingService);
+    if (bookingBarberButton) selectBarber(bookingBarberButton.dataset.bookingBarber);
   });
   ['booking-service', 'booking-barber', 'client-name', 'client-phone'].forEach(id => {
     byId(id).addEventListener('input', updateSteps);
     byId(id).addEventListener('change', updateSteps);
   });
-  byId('booking-service').addEventListener('change', () => { clearSelectedDateTime(); updateSelectedCards(); updateTimes(); updateSteps(); });
-  byId('booking-barber').addEventListener('change', () => { clearSelectedDateTime(); updateSelectedCards(); updateTimes(); updateSteps(); });
-  byId('day-strip').addEventListener('click', event => { const day = event.target.closest('[data-date]'); if (day && !day.disabled) selectDay(day.dataset.date); });
+  byId('booking-service').addEventListener('change', () => { clearSelectedDateTime(); closeMiniCalendar(); updateSelectedCards(); updateTimes(); updateSteps(); });
+  byId('booking-barber').addEventListener('change', () => { clearSelectedDateTime(); closeMiniCalendar(); updateSelectedCards(); updateTimes(); updateSteps(); });
+  byId('calendar-toggle').addEventListener('click', openMiniCalendar);
+  byId('calendar-prev').addEventListener('click', () => {
+    calendarCursor.setMonth(calendarCursor.getMonth() - 1);
+    renderMiniCalendar();
+  });
+  byId('calendar-next').addEventListener('click', () => {
+    calendarCursor.setMonth(calendarCursor.getMonth() + 1);
+    renderMiniCalendar();
+  });
+  byId('calendar-days').addEventListener('click', event => {
+    const day = event.target.closest('[data-calendar-date]');
+    if (day && !day.disabled) selectDate(day.dataset.calendarDate);
+  });
+  document.addEventListener('click', event => {
+    if (!event.target.closest('.mini-date-picker')) closeMiniCalendar();
+  });
   byId('time-groups').addEventListener('click', event => { const slot = event.target.closest('[data-time]'); if (slot && !slot.disabled) selectScheduleSlot(slot.dataset.date, slot.dataset.time); });
   byId('client-phone').addEventListener('input', maskPhoneInput);
   byId('manage-phone').addEventListener('input', maskPhoneInput);
   byId('manage-code').addEventListener('input', event => { event.target.value = normalizeCode(event.target.value); });
   byId('booking-form').addEventListener('submit', submitBooking);
+  byId('success-close').addEventListener('click', closeSuccessModal);
+  byId('success-copy').addEventListener('click', copySuccessCode);
+  byId('success-manage').addEventListener('click', prepareManageFromSuccess);
   byId('manage-form').addEventListener('submit', submitManage);
   byId('manage-cancel').addEventListener('click', cancelManagedAppointment);
   byId('manage-reschedule-toggle').addEventListener('click', () => {
@@ -796,10 +945,11 @@ function init() {
   renderSelects();
   renderBusiness();
   setMinDate();
-  renderDayStrip();
+  renderMiniCalendar();
   renderTimeGroups();
   updateScheduleSummary();
   updateTimes();
+  updateBookingVisibility();
   updateRescheduleTimes();
   attachEvents();
   initReveal();

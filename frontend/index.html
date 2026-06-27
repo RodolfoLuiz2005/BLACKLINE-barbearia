@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
@@ -70,73 +70,124 @@
           <p>Escolha servico, barbeiro, data e horario. No final, voce recebe um codigo para acompanhar seu atendimento.</p>
         </div>
 
-        <form class="booking-card" id="booking-form" novalidate>
+        <form class="booking-card booking-flow" id="booking-form" novalidate>
+          <div class="booking-card-header">
+            <p class="eyebrow">Agendamento</p>
+            <h3>Agende seu horario</h3>
+            <p>Escolha o servico, barbeiro, data e horario.</p>
+          </div>
+
           <div class="booking-steps" aria-label="Etapas do agendamento">
             <span class="active">1 Servico</span>
             <span>2 Barbeiro</span>
-            <span>3 Data e horario</span>
-            <span>4 Confirmacao</span>
+            <span>3 Data</span>
+            <span>4 Horario</span>
+            <span>5 Dados</span>
           </div>
 
-          <div class="form-grid">
-            <label>
-              Nome do cliente *
-              <input id="client-name" name="name" type="text" autocomplete="name" />
-            </label>
-            <label>
-              WhatsApp *
-              <input id="client-phone" name="phone" type="tel" inputmode="numeric" autocomplete="tel" />
-            </label>
-            <label>
-              Servico *
-              <select id="booking-service" name="service"></select>
-            </label>
-            <label>
-              Barbeiro *
-              <select id="booking-barber" name="barber"></select>
-            </label>
-            <section class="visual-picker full" aria-labelledby="date-picker-title">
-              <div class="picker-heading">
+          <div class="form-grid booking-flow-grid">
+            <section class="booking-choice full" aria-labelledby="service-choice-title">
+              <div class="picker-heading compact">
                 <div>
-                  <span id="date-picker-title">Data *</span>
-                  <strong id="selected-day-label">Escolha servico e barbeiro para ver a agenda</strong>
+                  <span id="service-choice-title">Servico</span>
+                  <strong>Escolha o atendimento.</strong>
+                </div>
+              </div>
+              <select id="booking-service" name="service" hidden></select>
+              <div class="booking-service-options" id="booking-service-options"></div>
+            </section>
+
+            <section class="booking-choice full" aria-labelledby="barber-choice-title">
+              <div class="picker-heading compact">
+                <div>
+                  <span id="barber-choice-title">Barbeiro</span>
+                  <strong>Selecione o profissional.</strong>
+                </div>
+              </div>
+              <select id="booking-barber" name="barber" hidden></select>
+              <div class="booking-barber-options" id="booking-barber-options"></div>
+            </section>
+
+            <section class="visual-picker mini-date-picker full" aria-labelledby="date-picker-title">
+              <div class="picker-heading compact">
+                <div>
+                  <span id="date-picker-title">Data</span>
+                  <strong id="selected-day-label">Escolha servico e barbeiro para liberar a data.</strong>
                 </div>
               </div>
               <input id="booking-date" name="date" type="hidden" />
-              <div class="day-strip" id="day-strip" aria-label="Dias disponiveis"></div>
+              <button class="btn btn-secondary mini-calendar-trigger" id="calendar-toggle" type="button" disabled>Escolher data</button>
+              <div class="mini-calendar" id="mini-calendar" hidden>
+                <div class="mini-calendar-top">
+                  <button type="button" id="calendar-prev" aria-label="Mes anterior">&lsaquo;</button>
+                  <strong id="calendar-month-label"></strong>
+                  <button type="button" id="calendar-next" aria-label="Proximo mes">&rsaquo;</button>
+                </div>
+                <div class="calendar-weekdays" aria-hidden="true">
+                  <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sab</span>
+                </div>
+                <div class="calendar-days" id="calendar-days"></div>
+              </div>
             </section>
 
-            <section class="visual-picker full" aria-labelledby="time-picker-title">
-              <div class="picker-heading">
+            <section class="visual-picker full" id="time-picker-panel" aria-labelledby="time-picker-title" hidden>
+              <div class="picker-heading compact">
                 <div>
-                  <span id="time-picker-title">Horario *</span>
-                  <strong id="selected-time-label">Selecione um dia para ver os horarios</strong>
+                  <span id="time-picker-title">Horario</span>
+                  <strong id="selected-time-label">Selecione uma data para ver os horarios.</strong>
                 </div>
               </div>
               <input id="booking-time" name="time" type="hidden" />
               <div class="time-groups" id="time-groups" aria-label="Horarios disponiveis"></div>
             </section>
 
-            <aside class="booking-summary full" id="booking-summary" aria-live="polite">
-              <span>Resumo do agendamento</span>
-              <p>Escolha servico, barbeiro, data e horario para revisar antes de confirmar.</p>
+            <aside class="booking-summary full" id="booking-summary" aria-live="polite" hidden>
+              <span>Resumo</span>
+              <p>Escolha um horario para revisar antes de confirmar.</p>
             </aside>
 
-            <label class="full">
-              Observacao opcional
-              <textarea id="booking-note" name="note" rows="4"></textarea>
-            </label>
+            <section class="client-details full" id="client-details" hidden>
+              <div class="picker-heading compact">
+                <div>
+                  <span>Seus dados</span>
+                  <strong>Informe seus dados para finalizar.</strong>
+                </div>
+              </div>
+              <div class="client-fields">
+                <label>
+                  Nome do cliente *
+                  <input id="client-name" name="name" type="text" autocomplete="name" />
+                </label>
+                <label>
+                  WhatsApp *
+                  <input id="client-phone" name="phone" type="tel" inputmode="numeric" autocomplete="tel" />
+                </label>
+                <label class="full">
+                  Observacao opcional
+                  <textarea id="booking-note" name="note" rows="3"></textarea>
+                </label>
+              </div>
+            </section>
           </div>
 
           <div class="form-feedback" id="form-feedback" role="alert"></div>
-          <button class="btn btn-primary btn-submit" type="submit">Confirmar agendamento</button>
+          <button class="btn btn-primary btn-submit" id="booking-submit" type="submit" hidden>Confirmar agendamento</button>
         </form>
 
-        <div class="success-card" id="success-card" hidden>
-          <p class="eyebrow">Agendamento registrado</p>
-          <h3 id="success-title"></h3>
-          <div class="success-details" id="success-details"></div>
-          <a class="btn btn-primary" id="success-whatsapp" target="_blank" rel="noopener">Enviar confirmacao pelo WhatsApp</a>
+        <div class="booking-modal" id="success-card" hidden>
+          <div class="success-card success-modal-card" role="dialog" aria-modal="true" aria-labelledby="success-title">
+            <div class="success-icon">✓</div>
+            <p class="eyebrow">Agendamento confirmado</p>
+            <h3 id="success-title">Agendamento confirmado</h3>
+            <strong class="success-code" id="success-code"></strong>
+            <div class="success-details" id="success-details"></div>
+            <div class="success-actions">
+              <button class="btn btn-secondary" type="button" id="success-copy">Copiar codigo</button>
+              <a class="btn btn-primary" id="success-whatsapp" target="_blank" rel="noopener">Enviar no WhatsApp</a>
+              <a class="btn btn-secondary" id="success-manage" href="#gerenciar">Acompanhar agendamento</a>
+              <button class="btn btn-secondary" type="button" id="success-close">Fechar</button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -233,6 +284,3 @@
     <script type="module" src="script.js"></script>
   </body>
 </html>
-
-
-

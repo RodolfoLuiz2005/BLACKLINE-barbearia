@@ -23,9 +23,9 @@ export const BLACKLINE_CONFIG = {
     { id: 'pigmentacao', name: 'Pigmentacao', duration: '40 min', durationMinutes: 40, price: 45, description: 'Pigmentacao capilar ou de barba com acabamento natural.' }
   ],
   barbers: [
-    { id: 'rafael-lima', name: 'Rafael Lima', specialty: 'Especialista em degrade e navalhado', availableDays: 'Segunda a sabado', photo: 'https://images.unsplash.com/photo-1618077360395-f3068be8e001?q=80&w=900&auto=format&fit=crop' },
-    { id: 'marcos-silva', name: 'Marcos Silva', specialty: 'Barba, corte classico e social', availableDays: 'Terca a sabado', photo: 'https://images.unsplash.com/photo-1582893561942-d61adcb2e534?q=80&w=900&auto=format&fit=crop' },
-    { id: 'andre-costa', name: 'Andre Costa', specialty: 'Corte moderno, freestyle e pigmentacao', availableDays: 'Quarta a sabado', photo: 'https://images.unsplash.com/photo-1621605815971-fbc98d665033?q=80&w=900&auto=format&fit=crop' }
+    { id: 'rafael-lima', name: 'Rafael Lima', specialty: 'Especialista em degrade e navalhado', availableDays: 'Segunda a sabado', availableWeekDays: [1, 2, 3, 4, 5, 6], unavailableDates: [], photo: 'https://images.unsplash.com/photo-1618077360395-f3068be8e001?q=80&w=900&auto=format&fit=crop' },
+    { id: 'marcos-silva', name: 'Marcos Silva', specialty: 'Barba, corte classico e social', availableDays: 'Terca a sabado', availableWeekDays: [2, 3, 4, 5, 6], unavailableDates: [], photo: 'https://images.unsplash.com/photo-1582893561942-d61adcb2e534?q=80&w=900&auto=format&fit=crop' },
+    { id: 'andre-costa', name: 'Andre Costa', specialty: 'Corte moderno, freestyle e pigmentacao', availableDays: 'Quarta a sabado', availableWeekDays: [3, 4, 5, 6], unavailableDates: [], photo: 'https://images.unsplash.com/photo-1621605815971-fbc98d665033?q=80&w=900&auto=format&fit=crop' }
   ],
   sampleTestimonials: [
     { name: 'Lucas Andrade', text: 'Atendimento pontual, corte bem alinhado e ambiente acima do que eu esperava.', rating: 5 },

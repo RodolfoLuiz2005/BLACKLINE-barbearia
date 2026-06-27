@@ -51,6 +51,7 @@ function normalizeAppointment(item) {
     serviceName: item.serviceName || service?.name || '-',
     barberName: item.barberName || barber?.name || '-',
     price: Number(item.price || service?.price || 0),
+    durationMinutes: Number(item.durationMinutes || service?.durationMinutes || 0),
     status: STATUS[item.status] ? item.status : 'pendente'
   };
 }
@@ -127,6 +128,7 @@ function renderTable() {
         <td data-label="Barbeiro">${escapeHtml(item.barberName)}</td>
         <td data-label="Data">${escapeHtml(formatDate(item.date))}</td>
         <td data-label="Horario">${escapeHtml(item.time)}</td>
+        <td data-label="Duracao">${item.durationMinutes ? `${item.durationMinutes} min` : '-'}</td>
         <td data-label="Valor">${money(item.price)}</td>
         <td data-label="Status"><span class="status ${status.className}">${status.label}</span></td>
         <td data-label="Acoes"><div class="actions">${actionButtons(item)}</div></td>
@@ -174,6 +176,3 @@ function attachEvents() {
 
 attachEvents();
 renderTable();
-
-
-
