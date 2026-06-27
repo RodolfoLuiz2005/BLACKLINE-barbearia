@@ -1,282 +1,148 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>BLACKLINE - Barbearia Premium</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css" />
-</head>
-<body>
-
-<div class="bg-blur bg1"></div>
-<div class="bg-blur bg2"></div>
-
-<header>
-  <div class="nav">
-    <div class="logo">BLACK<span>LINE</span></div>
-    <div class="menu">
-      <a href="#servicos">Serviços</a>
-      <a href="#galeria">Galeria</a>
-      <a href="#clube">Clube</a>
-      <a href="#localizacao">Localização</a>
-    </div>
-    <div class="nav-actions">
-      <button class="btn-manage" onclick="abrirGerenciar()">Gerenciar</button>
-      <button class="btn-nav" onclick="abrirModal()">Agendar</button>
-    </div>
-  </div>
-</header>
-
-<section class="hero">
-  <div class="hero-container">
-    <div class="hero-text">
-      <div class="tag">Barbearia Premium em Recife</div>
-      <h1>Estilo, presen&ccedil;a e <span>experi&ecirc;ncia premium</span>.</h1>
-      <p>Uma barbearia moderna criada para homens que valorizam apar&ecirc;ncia, atendimento exclusivo e um ambiente sofisticado. Cortes impec&aacute;veis, barba premium e experi&ecirc;ncia diferenciada.</p>
-      <div class="hero-buttons">
-        <button class="btn-primary" onclick="abrirModal()">Agendar Hor&aacute;rio</button>
-        <a href="#servicos" class="btn-secondary">Conhecer Servi&ccedil;os</a>
-      </div>
-    </div>
-    <div class="hero-image">
-      <div class="glow"></div>
-      <img src="https://images.unsplash.com/photo-1622286342621-4bd786c2447c?q=80&w=1400&auto=format&fit=crop" alt="Barbearia BLACKLINE">
-    </div>
-  </div>
-</section>
-
-<section id="servicos">
-  <div class="container">
-    <div class="section-top reveal">
-      <span>SERVI&Ccedil;OS PREMIUM</span>
-      <h2>Escolha sua experi&ecirc;ncia</h2>
-      <p>Servi&ccedil;os, pre&ccedil;os e dura&ccedil;&atilde;o carregados da base da BLACKLINE.</p>
-    </div>
-    <div class="services-grid" id="services-grid">
-      <div class="section-loading">Carregando servi&ccedil;os...</div>
-    </div>
-  </div>
-</section>
-
-<section id="galeria" class="gallery-section">
-  <div class="container">
-    <div class="section-top reveal">
-      <span>GALERIA DE CORTES</span>
-      <h2>Refer&ecirc;ncias BLACKLINE</h2>
-      <p>Inspira&ccedil;&otilde;es premium para escolher o pr&oacute;ximo visual.</p>
-    </div>
-    <div class="gallery-grid" id="gallery-grid"></div>
-  </div>
-</section>
-
-<section id="clube" class="plans-section">
-  <div class="container">
-    <div class="section-top reveal">
-      <span>CLUBE DO CORTE</span>
-      <h2>Planos mensais</h2>
-      <p>Benef&iacute;cios para quem mant&eacute;m o visual sempre em dia.</p>
-    </div>
-    <div class="plans-grid" id="plans-grid"></div>
-  </div>
-</section>
-
-<section class="testimonials" id="depoimentos">
-  <div class="container">
-    <div class="section-top reveal">
-      <span>AVALIA&Ccedil;&Otilde;ES GOOGLE</span>
-      <h2>Veja avalia&ccedil;&otilde;es reais</h2>
-      <p>Configure o link do perfil Google da barbearia para mostrar o caminho oficial de avalia&ccedil;&otilde;es.</p>
-    </div>
-    <div class="testimonials-grid">
-      <div class="testimonial reveal review-info-card">
-        <div class="stars">*****</div>
-        <p>A BLACKLINE usa links configur&aacute;veis para avalia&ccedil;&otilde;es reais. N&atilde;o exibimos depoimentos inventados como se fossem reais.</p>
-      </div>
-      <div class="testimonial reveal review-info-card">
-        <div class="stars">*****</div>
-        <p>Com o link do Google configurado, o cliente pode abrir a p&aacute;gina oficial para avaliar ou conferir coment&aacute;rios reais.</p>
-      </div>
-      <div class="testimonial reveal google-review-card">
-        <div class="stars">*****</div>
-        <p id="google-rating-text">Avalia&ccedil;&atilde;o Google configur&aacute;vel pela barbearia.</p>
-        <a id="google-review-link" class="agendar-servico-btn" href="https://www.google.com/search?q=BLACKLINE+Barber+Recife+avaliacoes" target="_blank" rel="noopener">Avaliar no Google</a>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="cta">
-  <div class="container">
-    <div class="cta-box reveal">
-      <div class="cta-text">
-        <h2>Agende seu hor&aacute;rio agora</h2>
-        <p>Atendimento exclusivo, hor&aacute;rios limitados e experi&ecirc;ncia premium. Clique abaixo e garanta seu hor&aacute;rio.</p>
-      </div>
-      <button class="whatsapp-btn" onclick="abrirModal()">Agendar Agora</button>
-    </div>
-  </div>
-</section>
-
-<section id="localizacao">
-  <div class="container">
-    <div class="section-top reveal">
-      <span>LOCALIZA&Ccedil;&Atilde;O</span>
-      <h2>Venha nos visitar</h2>
-      <p>Endere&ccedil;o e mapa configur&aacute;veis pela barbearia.</p>
-    </div>
-    <div class="location-grid">
-      <div class="location-info reveal">
-        <h3>BLACKLINE Barber</h3>
-        <div class="location-item"><strong>Endere&ccedil;o</strong><span id="site-address">Av. Boa Viagem, Recife - PE</span></div>
-        <div class="location-item"><strong>Hor&aacute;rios</strong><span id="site-hours">Segunda a S&aacute;bado - 08h &agrave;s 18h</span></div>
-        <div class="location-item"><strong>Contato</strong><span id="site-phone">(81) 99999-9999</span></div>
-      </div>
-      <div class="map reveal">
-        <iframe id="site-map" src="https://www.google.com/maps?q=Av.%20Boa%20Viagem%2C%20Recife%20-%20PE&output=embed" loading="lazy"></iframe>
-      </div>
-    </div>
-  </div>
-</section>
-
-<footer>
-  <div class="footer-content">
-    <p>&copy; 2026 BLACKLINE Barber - Todos os direitos reservados.</p>
-    <div class="socials">
-      <a id="social-instagram" href="https://www.instagram.com/blacklinebarber" target="_blank" rel="noopener">INSTA</a>
-      <a id="social-facebook" href="https://www.facebook.com/blacklinebarber" target="_blank" rel="noopener">FACE</a>
-      <a id="social-tiktok" href="https://www.tiktok.com/@blacklinebarber" target="_blank" rel="noopener">TTK</a>
-    </div>
-  </div>
-</footer>
-
-<a id="float-whats" href="https://wa.me/5581999999999" class="float-whats" target="_blank" rel="noopener">WA</a>
-
-<div class="modal-overlay" id="modalOverlay" onclick="fecharModalFora(event)">
-  <div class="modal" id="modal">
-    <button class="modal-close" onclick="fecharModal()">x</button>
-
-    <div class="modal-header">
-      <div class="modal-icon">BL</div>
-      <h2>Agendar Hor&aacute;rio</h2>
-      <p>Preencha os dados abaixo para garantir seu hor&aacute;rio</p>
-    </div>
-
-    <div id="step-form">
-      <div class="form-grid">
-        <div class="form-group">
-          <label>Nome completo *</label>
-          <input type="text" id="inp-nome" placeholder="Seu nome" />
-        </div>
-
-        <div class="form-group">
-          <label>WhatsApp *</label>
-          <input type="tel" id="inp-telefone" placeholder="(81) 99999-9999" />
-        </div>
-
-        <div class="form-group form-full">
-          <label>Servi&ccedil;o *</label>
-          <div class="custom-select-wrap" id="select-servico-wrap">
-            <div class="custom-select-trigger" id="select-trigger" onclick="toggleSelect()">
-              <span id="select-label">Selecione um servi&ccedil;o...</span>
-              <svg class="select-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </div>
-            <div class="custom-select-dropdown" id="select-dropdown"></div>
-          </div>
-          <input type="hidden" id="inp-servico" />
-        </div>
-
-        <div class="form-group form-full">
-          <label>Escolha o profissional *</label>
-          <select id="inp-profissional"></select>
-        </div>
-
-        <div class="form-group form-full">
-          <label>Data *</label>
-          <div class="cal-wrapper">
-            <div id="mini-calendario"></div>
-            <div class="cal-data-label" id="data-selecionada-label">Selecione uma data no calend&aacute;rio</div>
-          </div>
-        </div>
-
-        <div class="form-group form-full">
-          <label>Hor&aacute;rio dispon&iacute;vel *</label>
-          <div class="horarios-grid" id="horarios-grid">
-            <p class="horarios-hint">Selecione profissional e data primeiro</p>
-          </div>
-        </div>
-
-        <div class="form-group form-full">
-          <label>Observa&ccedil;&otilde;es</label>
-          <textarea id="inp-obs" placeholder="Prefer&ecirc;ncia de corte, estilo ou observa&ccedil;&atilde;o especial..."></textarea>
-        </div>
-      </div>
-
-      <div class="form-error" id="form-error"></div>
-
-      <button class="btn-agendar" id="btn-agendar" onclick="enviarAgendamento()">
-        <span id="btn-text">Confirmar Agendamento</span>
-        <span id="btn-loader" class="btn-loader" style="display:none">...</span>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Blackline Barbearia | Agendamento premium</title>
+    <meta name="description" content="Blackline Barbearia: corte, barba e estilo com atendimento premium. Agende seu horario online." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="site-header" id="site-header">
+      <a class="brand" href="#inicio" aria-label="Blackline Barbearia">BLACK<span>LINE</span></a>
+      <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Abrir menu">
+        <span></span><span></span><span></span>
       </button>
-    </div>
+      <nav class="site-nav" id="site-nav" aria-label="Navegacao principal">
+        <a href="#servicos">Servicos</a>
+        <a href="#barbeiros">Barbeiros</a>
+        <a href="#agendamento">Agendamento</a>
+        <a href="#localizacao">Localizacao</a>
+        <a href="admin.html">ADM</a>
+      </nav>
+    </header>
 
-    <div id="step-sucesso" style="display:none">
-      <div class="sucesso-box">
-        <div class="sucesso-icon">OK</div>
-        <h3>Agendamento registrado!</h3>
-        <p id="sucesso-texto"></p>
-        <div class="sucesso-detalhes" id="sucesso-detalhes"></div>
-        <a id="sucesso-whatsapp" class="btn-agendar btn-link" href="https://wa.me/5581999999999" target="_blank" rel="noopener">Enviar confirma&ccedil;&atilde;o pelo WhatsApp</a>
-        <button class="btn-agendar btn-muted" onclick="fecharModal()">Fechar</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="manageOverlay" onclick="fecharGerenciarFora(event)">
-  <div class="modal manage-modal">
-    <button class="modal-close" onclick="fecharGerenciar()">x</button>
-    <div class="modal-header">
-      <div class="modal-icon">ID</div>
-      <h2>Gerenciar meu agendamento</h2>
-      <p>Consulte com seu WhatsApp e c&oacute;digo de atendimento.</p>
-    </div>
-
-    <div class="form-grid">
-      <div class="form-group">
-        <label>WhatsApp *</label>
-        <input type="tel" id="manage-telefone" placeholder="(81) 99999-9999" />
-      </div>
-      <div class="form-group">
-        <label>C&oacute;digo *</label>
-        <input type="text" id="manage-codigo" placeholder="BL123ABC" />
-      </div>
-    </div>
-    <button class="btn-agendar" onclick="consultarAgendamento()">Consultar</button>
-    <div class="form-error" id="manage-error"></div>
-    <div id="manage-result" class="manage-result" style="display:none"></div>
-
-    <div id="reschedule-box" style="display:none">
-      <div class="form-grid">
-        <div class="form-group form-full">
-          <label>Novo profissional</label>
-          <select id="manage-profissional"></select>
+    <main>
+      <section class="hero" id="inicio">
+        <video class="hero-video" autoplay muted loop playsinline poster="" id="hero-video">
+          <source id="hero-video-source" src="" type="video/mp4" />
+        </video>
+        <div class="hero-fallback" id="hero-fallback"></div>
+        <div class="hero-overlay"></div>
+        <div class="hero-content">
+          <p class="eyebrow">Blackline Barbearia</p>
+          <h1>Corte, barba e estilo com atendimento premium</h1>
+          <p class="hero-subtitle">Agende seu horario com barbeiros especialistas.</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#agendamento">Agendar agora</a>
+            <a class="btn btn-secondary" href="#servicos">Ver servicos</a>
+          </div>
         </div>
-        <div class="form-group form-full">
-          <label>Nova data</label>
-          <input type="date" id="manage-data" />
+      </section>
+
+      <section class="section services-section" id="servicos">
+        <div class="section-heading">
+          <p class="eyebrow">Servicos</p>
+          <h2>Menu direto, acabamento premium.</h2>
+          <p>Escolha o servico e avance para o agendamento com ele ja selecionado.</p>
         </div>
-        <div class="form-group form-full">
-          <label>Novo hor&aacute;rio</label>
-          <div class="horarios-grid" id="manage-horarios"></div>
+        <div class="services-grid" id="services-grid"></div>
+      </section>
+
+      <section class="section barbers-section" id="barbeiros">
+        <div class="section-heading">
+          <p class="eyebrow">Equipe</p>
+          <h2>Nossos barbeiros</h2>
+          <p>Especialistas para corte classico, degrade, barba e pigmentacao.</p>
         </div>
-      </div>
-      <button class="btn-agendar" onclick="reagendarCliente()">Confirmar reagendamento</button>
-    </div>
-  </div>
-</div>
-<script type="module" src="script.js?v=20260604-calendario"></script>
-</body>
+        <div class="barbers-grid" id="barbers-grid"></div>
+      </section>
+
+      <section class="booking-section" id="agendamento">
+        <div class="booking-intro">
+          <p class="eyebrow">Agendamento</p>
+          <h2>Reserve seu horario em poucos passos.</h2>
+          <p>O atendimento entra no painel ADM automaticamente e voce recebe um codigo para acompanhar.</p>
+        </div>
+
+        <form class="booking-card" id="booking-form" novalidate>
+          <div class="booking-steps" aria-label="Etapas do agendamento">
+            <span class="active">1 Servico</span>
+            <span>2 Barbeiro</span>
+            <span>3 Data</span>
+            <span>4 Horario</span>
+            <span>5 Confirmar</span>
+          </div>
+
+          <div class="form-grid">
+            <label>
+              Nome do cliente *
+              <input id="client-name" name="name" type="text" autocomplete="name" />
+            </label>
+            <label>
+              WhatsApp *
+              <input id="client-phone" name="phone" type="tel" inputmode="numeric" autocomplete="tel" />
+            </label>
+            <label>
+              Servico *
+              <select id="booking-service" name="service"></select>
+            </label>
+            <label>
+              Barbeiro *
+              <select id="booking-barber" name="barber"></select>
+            </label>
+            <label>
+              Data *
+              <input id="booking-date" name="date" type="date" />
+            </label>
+            <label>
+              Horario *
+              <select id="booking-time" name="time"></select>
+            </label>
+            <label class="full">
+              Observacao opcional
+              <textarea id="booking-note" name="note" rows="4"></textarea>
+            </label>
+          </div>
+
+          <div class="form-feedback" id="form-feedback" role="alert"></div>
+          <button class="btn btn-primary btn-submit" type="submit">Confirmar agendamento</button>
+        </form>
+
+        <div class="success-card" id="success-card" hidden>
+          <p class="eyebrow">Agendamento registrado</p>
+          <h3 id="success-title"></h3>
+          <div class="success-details" id="success-details"></div>
+          <a class="btn btn-primary" id="success-whatsapp" target="_blank" rel="noopener">Enviar pelo WhatsApp</a>
+        </div>
+      </section>
+
+      <section class="section location-section" id="localizacao">
+        <div class="location-panel">
+          <div>
+            <p class="eyebrow">Localizacao</p>
+            <h2 id="business-name">Blackline Barbearia</h2>
+            <div class="contact-list">
+              <p><strong>Endereco</strong><span id="business-address"></span></p>
+              <p><strong>Horario</strong><span id="business-hours"></span></p>
+              <p><strong>WhatsApp</strong><span id="business-phone"></span></p>
+              <p><strong>Instagram</strong><a id="business-instagram" target="_blank" rel="noopener"></a></p>
+            </div>
+          </div>
+          <iframe id="business-map" title="Mapa da Blackline Barbearia" loading="lazy"></iframe>
+        </div>
+      </section>
+    </main>
+
+    <a class="floating-whatsapp" id="floating-whatsapp" target="_blank" rel="noopener" aria-label="WhatsApp">WA</a>
+
+    <footer class="site-footer">
+      <p>© 2026 Blackline Barbearia. Atendimento premium, agenda organizada e estilo no detalhe.</p>
+    </footer>
+
+    <script type="module" src="script.js"></script>
+  </body>
 </html>

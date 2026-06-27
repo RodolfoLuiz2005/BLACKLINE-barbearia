@@ -32,8 +32,14 @@ export async function getBlacklineDb() {
   if (firestoreDb) return firestoreDb;
 
   firebaseApp = await getBlacklineApp();
-  const { getFirestore } = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js');
-  firestoreDb = getFirestore(firebaseApp);
+  const { getFirestore, initializeFirestore } = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js');
+  try {
+    firestoreDb = initializeFirestore(firebaseApp, {
+      experimentalAutoDetectLongPolling: true
+    });
+  } catch (err) {
+    firestoreDb = getFirestore(firebaseApp);
+  }
   return firestoreDb;
 }
 
