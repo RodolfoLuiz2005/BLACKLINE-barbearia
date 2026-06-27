@@ -1880,3 +1880,26 @@ input:focus, select:focus, textarea:focus { border-color: var(--gold); box-shado
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Security and privacy polish */
+.privacy-note {
+  max-width: 520px;
+  margin: 12px auto 0;
+  color: var(--muted);
+  font-size: .82rem;
+  line-height: 1.55;
+}
+.privacy-note a {
+  color: var(--gold-2);
+  font-weight: 900;
+  text-decoration: none;
+}
+.privacy-note a:hover {
+  text-decoration: underline;
+}
+.privacy-section {
+  background: #090909;
+}
+.privacy-section .section-heading {
+  max-width: 860px;
+}

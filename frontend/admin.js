@@ -10,6 +10,7 @@ const STATUS = {
 };
 const ADMIN_SESSION_KEY = 'blackline:admin:session';
 const ADMIN_PIN_HASH = '158a323a7ba44870f23d96f1516dd70aa48e9a72db4ebb026b0a89e212a208ab';
+const FUTURE_ADMIN_ROLES = ['admin', 'barbeiro', 'recepção'];
 let adminEventsBound = false;
 
 // Autenticação provisória para ambiente sem backend. Em produção, substitua por autenticação real no servidor (Supabase, Firebase Auth ou API própria) e regras de autorização no backend.
@@ -67,9 +68,18 @@ function onlyDigits(value) { return String(value || '').replace(/\D/g, ''); }
 function money(value) { return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 function formatPhone(value) {
   const digits = onlyDigits(value);
-  if (digits.length === 11) return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  if (digits.length === 11) return '(' + digits.slice(0, 2) + ') ' + digits.slice(2, 7) + '-' + digits.slice(7);
   return value || '';
 }
+function maskPhone(value) {
+  const digits = onlyDigits(value);
+  if (digits.length < 4) return '••••';
+  return '(**) *****-' + digits.slice(-4);
+}
+function historyEntry(type, details = {}) {
+  return { type, at: new Date().toISOString(), ...details };
+}
+
 function formatDate(value) {
   if (!value) return '-';
   const date = new Date(`${value}T12:00:00`);
@@ -146,15 +156,25 @@ function renderMetrics() {
   byId('metric-barber').textContent = mostFrequent(rows.filter(row => row.status !== 'cancelado'), 'barberName');
 }
 
-function actionButtons(item) {
-  const id = escapeHtml(item.id);
-  const parts = [];
-  if (item.status === 'pendente') parts.push(`<button data-action="status" data-id="${id}" data-status="confirmado">Confirmar</button>`);
-  if (['pendente', 'confirmado'].includes(item.status)) parts.push(`<button data-action="status" data-id="${id}" data-status="em_atendimento">Iniciar</button>`);
-  if (item.status !== 'concluido' && item.status !== 'cancelado') parts.push(`<button data-action="status" data-id="${id}" data-status="concluido">Concluir</button>`);
-  if (item.status !== 'cancelado' && item.status !== 'concluido') parts.push(`<button data-action="cancel" data-id="${id}">Cancelar</button>`);
-  parts.push(`<a href="${whatsappLink(item.phone, buildClientMessage(item))}" target="_blank" rel="noopener">WhatsApp</a>`);
-  return parts.join('');
+function appendActionButton(container, item, label, dataset) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = label;
+  Object.entries(dataset).forEach(([key, value]) => { button.dataset[key] = value; });
+  button.dataset.id = item.id;
+  container.appendChild(button);
+}
+function appendActions(container, item) {
+  if (item.status === 'pendente') appendActionButton(container, item, 'Confirmar', { action: 'status', status: 'confirmado' });
+  if (['pendente', 'confirmado'].includes(item.status)) appendActionButton(container, item, 'Iniciar', { action: 'status', status: 'em_atendimento' });
+  if (item.status !== 'concluido' && item.status !== 'cancelado') appendActionButton(container, item, 'Concluir', { action: 'status', status: 'concluido' });
+  if (item.status !== 'cancelado' && item.status !== 'concluido') appendActionButton(container, item, 'Cancelar', { action: 'cancel' });
+  const link = document.createElement('a');
+  link.href = whatsappLink(item.phone, buildClientMessage(item));
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.textContent = 'WhatsApp';
+  container.appendChild(link);
 }
 
 function renderTable() {
@@ -162,24 +182,49 @@ function renderTable() {
   const tbody = byId('appointments-body');
   const empty = byId('empty-state');
   const table = byId('table-wrap');
-  tbody.innerHTML = rows.map(item => {
+  tbody.replaceChildren();
+  rows.forEach(item => {
     const status = STATUS[item.status];
-    return `
-      <tr>
-        <td data-label="Código"><strong>${escapeHtml(item.code)}</strong></td>
-        <td data-label="Cliente">${escapeHtml(item.name)}</td>
-        <td data-label="WhatsApp">${escapeHtml(formatPhone(item.phone))}</td>
-        <td data-label="Serviço">${escapeHtml(item.serviceName)}</td>
-        <td data-label="Barbeiro">${escapeHtml(item.barberName)}</td>
-        <td data-label="Data">${escapeHtml(formatDate(item.date))}</td>
-        <td data-label="Horário">${escapeHtml(item.time)}</td>
-        <td data-label="Duração">${item.durationMinutes ? `${item.durationMinutes} min` : '-'}</td>
-        <td data-label="Valor">${money(item.price)}</td>
-        <td data-label="Status"><span class="status ${status.className}">${status.label}</span></td>
-        <td data-label="Ações"><div class="actions">${actionButtons(item)}</div></td>
-      </tr>
-    `;
-  }).join('');
+    const row = document.createElement('tr');
+    const cells = [
+      ['Código', item.code, true],
+      ['Cliente', item.name],
+      ['WhatsApp', maskPhone(item.phone)],
+      ['Serviço', item.serviceName],
+      ['Barbeiro', item.barberName],
+      ['Data', formatDate(item.date)],
+      ['Horário', item.time],
+      ['Duração', item.durationMinutes ? item.durationMinutes + ' min' : '-'],
+      ['Valor', money(item.price)]
+    ];
+    cells.forEach(([label, value, strong]) => {
+      const cell = document.createElement('td');
+      cell.dataset.label = label;
+      if (strong) {
+        const el = document.createElement('strong');
+        el.textContent = value || '-';
+        cell.appendChild(el);
+      } else {
+        cell.textContent = value || '-';
+      }
+      row.appendChild(cell);
+    });
+    const statusCell = document.createElement('td');
+    statusCell.dataset.label = 'Status';
+    const statusBadge = document.createElement('span');
+    statusBadge.className = 'status ' + status.className;
+    statusBadge.textContent = status.label;
+    statusCell.appendChild(statusBadge);
+    row.appendChild(statusCell);
+    const actionsCell = document.createElement('td');
+    actionsCell.dataset.label = 'Ações';
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    appendActions(actions, item);
+    actionsCell.appendChild(actions);
+    row.appendChild(actionsCell);
+    tbody.appendChild(row);
+  });
   empty.hidden = rows.length > 0;
   table.hidden = rows.length === 0;
   renderMetrics();
@@ -189,11 +234,13 @@ function updateStatus(id, status) {
   const rows = loadAppointments();
   const index = rows.findIndex(item => item.id === id);
   if (index === -1) return;
+  const previousHistory = Array.isArray(rows[index].history) ? rows[index].history : [];
   rows[index].status = status;
+  rows[index].history = [...previousHistory, historyEntry('admin_status_changed', { status })];
   rows[index].updatedAt = new Date().toISOString();
   saveAppointments(rows);
   renderTable();
-  toast(`Status atualizado para ${STATUS[status].label}.`);
+  toast('Status atualizado para ' + STATUS[status].label + '.');
 }
 
 function cancelAppointment(id) {

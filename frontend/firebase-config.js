@@ -1,11 +1,15 @@
+const firebaseEnv = import.meta.env || {};
+
+// As variáveis VITE_ são públicas no bundle final. A apiKey do Firebase no front-end
+// não é um segredo absoluto; a segurança real depende de restrições da chave no
+// Google Cloud Console e de regras corretas no Firebase Authentication/Firestore.
 export const firebaseConfig = {
-  apiKey: "AIzaSyBk-VMGDd9pRMl9WJsCniySpTlwkvmqUpA",
-  authDomain: "blackline-93c09.firebaseapp.com",
-  projectId: "blackline-93c09",
-  storageBucket: "blackline-93c09.firebasestorage.app",
-  messagingSenderId: "233160577064",
-  appId: "1:233160577064:web:d476597596bc4b20cb251d",
-  measurementId: "G-RCK9ZC6JVM"
+  apiKey: firebaseEnv.VITE_FIREBASE_API_KEY || '',
+  authDomain: firebaseEnv.VITE_FIREBASE_AUTH_DOMAIN || '',
+  projectId: firebaseEnv.VITE_FIREBASE_PROJECT_ID || '',
+  storageBucket: firebaseEnv.VITE_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: firebaseEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: firebaseEnv.VITE_FIREBASE_APP_ID || ''
 };
 
 let firebaseApp;
@@ -15,37 +19,40 @@ let firebaseAuth;
 function hasFirebaseConfig(config) {
   return Boolean(
     config.apiKey &&
+    config.authDomain &&
     config.projectId &&
-    config.appId &&
-    config.apiKey !== 'COLOCAR_API_KEY_AQUI' &&
-    config.appId !== 'COLOCAR_APP_ID_AQUI' &&
-    config.messagingSenderId !== 'COLOCAR_MESSAGING_SENDER_ID_AQUI' &&
-    config.projectId === 'blackline-93c09'
+    config.storageBucket &&
+    config.messagingSenderId &&
+    config.appId
   );
+}
+
+function firebaseConfigError() {
+  return new Error('Firebase não configurado. Defina VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_STORAGE_BUCKET, VITE_FIREBASE_MESSAGING_SENDER_ID e VITE_FIREBASE_APP_ID no ambiente de build.');
 }
 
 export async function getBlacklineDb() {
   if (!hasFirebaseConfig(firebaseConfig)) {
-    throw new Error('Firebase não configurado para o projeto blackline-93c09. Preencha apiKey, messagingSenderId e appId em frontend/firebase-config.js.');
+    throw firebaseConfigError();
   }
 
   if (firestoreDb) return firestoreDb;
 
   firebaseApp = await getBlacklineApp();
-  const { getiirestore, initializeiirestore } = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js');
+  const { getFirestore, initializeFirestore } = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js');
   try {
-    firestoreDb = initializeiirestore(firebaseApp, {
+    firestoreDb = initializeFirestore(firebaseApp, {
       experimentalAutoDetectLongPolling: true
     });
   } catch (err) {
-    firestoreDb = getiirestore(firebaseApp);
+    firestoreDb = getFirestore(firebaseApp);
   }
   return firestoreDb;
 }
 
 export async function getBlacklineApp() {
   if (!hasFirebaseConfig(firebaseConfig)) {
-    throw new Error('Firebase não configurado para o projeto blackline-93c09. Preencha apiKey, messagingSenderId e appId em frontend/firebase-config.js.');
+    throw firebaseConfigError();
   }
 
   if (firebaseApp) return firebaseApp;

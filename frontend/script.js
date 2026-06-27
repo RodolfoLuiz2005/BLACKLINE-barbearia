@@ -9,8 +9,17 @@ const statusLabels = {
   cancelado: 'Cancelado'
 };
 const BOOKING_BLOCKING_STATUSES = new Set(['pendente', 'confirmado', 'em_atendimento']);
+const CLIENT_MUTABLE_STATUSES = new Set(['pendente', 'confirmado']);
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const MANAGE_ATTEMPT_KEY = 'blackline:manage-attempts';
+const MANAGE_MAX_ATTEMPTS = 5;
+const MANAGE_LOCK_MS = 5 * 60 * 1000;
+const NAME_MAX_LENGTH = 80;
+const NOTE_MAX_LENGTH = 300;
+const GENERIC_MANAGE_ERROR = 'Não foi possível consultar o agendamento. Confira os dados e tente novamente.';
 
 let managedAppointmentId = '';
+let managedAccessToken = '';
 let currentStep = 0;
 const BOOKING_STEP_COUNT = 6;
 const TIME_PERIODS = [
@@ -70,7 +79,26 @@ function formatDate(value) {
 }
 
 function whatsappLink(phone, message) {
-  return `https://wa.me/${onlyDigits(phone)}?text=${encodeURIComponent(message)}`;
+  const cleanPhone = onlyDigits(phone);
+  if (!cleanPhone) return '#';
+  return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+}
+function isValidBrazilianWhatsapp(value) {
+  const digits = onlyDigits(value);
+  if (digits.length !== 11) return false;
+  if (!/^[1-9]{2}9\d{8}$/.test(digits)) return false;
+  return !/^(\d)\1+$/.test(digits);
+}
+function sanitizeTextField(value, maxLength) {
+  return String(value || '').replace(/[<>]/g, '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maxLength);
+}
+function sanitizeNoteField(value) {
+  return String(value || '').replace(/[<>]/g, '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ' ').trim().slice(0, NOTE_MAX_LENGTH);
+}
+function maskPhone(value) {
+  const digits = onlyDigits(value);
+  if (digits.length < 4) return '••••';
+  return `(**) *****-${digits.slice(-4)}`;
 }
 
 function loadAppointments() {
@@ -85,12 +113,18 @@ function saveAppointments(rows) {
   localStorage.setItem(storageKeys.appointments, JSON.stringify(rows));
 }
 
+function randomCodeSuffix(length = 6) {
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, byte => CODE_ALPHABET[byte % CODE_ALPHABET.length]).join('');
+}
 function nextCode() {
-  const maxNumber = loadAppointments().reduce((max, item) => {
-    const match = String(item.code || '').match(/^BLK-(\d{6})$/);
-    return match ? Math.max(max, Number(match[1])) : max;
-  }, 0);
-  return `BLK-${String(maxNumber + 1).padStart(6, '0')}`;
+  const existing = new Set(loadAppointments().map(item => normalizeCode(item.code)));
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const code = `BLK-${randomCodeSuffix()}`;
+    if (!existing.has(code)) return code;
+  }
+  throw new Error('Não foi possível gerar um código seguro. Tente novamente.');
 }
 
 function minutesFromTime(value) {
@@ -258,13 +292,34 @@ function getAppointment(id) {
   return loadAppointments().find(item => item.id === id);
 }
 
-function setAppointment(id, patch) {
+function setAppointment(id, patch, history = null) {
   const rows = loadAppointments();
   const index = rows.findIndex(item => item.id === id);
   if (index === -1) return null;
-  rows[index] = { ...rows[index], ...patch, updatedAt: new Date().toISOString() };
+  const previousHistory = Array.isArray(rows[index].history) ? rows[index].history : [];
+  rows[index] = { ...rows[index], ...patch, history: history ? [...previousHistory, history] : previousHistory, updatedAt: new Date().toISOString() };
   saveAppointments(rows);
   return rows[index];
+}
+function historyEntry(type, details = {}) { return { type, at: new Date().toISOString(), ...details }; }
+function manageTokenFor(appointment) { return appointment ? [appointment.id, normalizeCode(appointment.code), onlyDigits(appointment.phone)].join(':') : ''; }
+function canManageAppointment(appointment) { return Boolean(appointment && managedAppointmentId === appointment.id && managedAccessToken === manageTokenFor(appointment)); }
+function canClientModify(appointment) { return canManageAppointment(appointment) && CLIENT_MUTABLE_STATUSES.has(appointment.status || 'pendente'); }
+function getManageAttemptState() {
+  try {
+    const state = JSON.parse(sessionStorage.getItem(MANAGE_ATTEMPT_KEY) || '{}');
+    if (Number(state.lockUntil || 0) <= Date.now()) return { count: Number(state.count || 0), lockUntil: 0 };
+    return { count: Number(state.count || 0), lockUntil: Number(state.lockUntil || 0) };
+  } catch { return { count: 0, lockUntil: 0 }; }
+}
+function setManageAttemptState(state) { sessionStorage.setItem(MANAGE_ATTEMPT_KEY, JSON.stringify(state)); }
+function clearManageAttempts() { sessionStorage.removeItem(MANAGE_ATTEMPT_KEY); }
+function registerManageFailure() {
+  const state = getManageAttemptState();
+  const nextCount = state.count + 1;
+  const nextState = nextCount >= MANAGE_MAX_ATTEMPTS ? { count: nextCount, lockUntil: Date.now() + MANAGE_LOCK_MS } : { count: nextCount, lockUntil: 0 };
+  setManageAttemptState(nextState);
+  return nextState;
 }
 
 function setHeroMedia() {
@@ -508,8 +563,8 @@ function renderTimeGroups() {
 }
 
 function customerDataReady() {
-  return byId('client-name').value.trim().split(/\s+/).filter(Boolean).length >= 2
-    && onlyDigits(byId('client-phone').value).length === 11;
+  return sanitizeTextField(byId('client-name').value, NAME_MAX_LENGTH).split(/\s+/).filter(Boolean).length >= 2
+    && isValidBrazilianWhatsapp(byId('client-phone').value);
 }
 
 function canAccessStep(step) {
@@ -669,32 +724,49 @@ function selectBarber(id) {
   window.setTimeout(() => goToStep(2), 200);
 }
 
+function appendDetail(container, label, value) {
+  const row = document.createElement('div');
+  const dt = document.createElement('dt');
+  const dd = document.createElement('dd');
+  dt.textContent = label;
+  dd.textContent = value || '-';
+  row.append(dt, dd);
+  container.appendChild(row);
+}
 function renderConfirmationSummary() {
+  const fragment = document.createDocumentFragment();
+  const title = document.createElement('span');
+  title.textContent = 'Resumo do agendamento';
+  fragment.appendChild(title);
   const service = services.find(item => item.id === byId('booking-service').value);
   const barber = barbers.find(item => item.id === byId('booking-barber').value);
   const date = byId('booking-date').value;
   const time = byId('booking-time').value;
-  const name = byId('client-name').value.trim();
+  const name = sanitizeTextField(byId('client-name').value, NAME_MAX_LENGTH);
   const phone = onlyDigits(byId('client-phone').value);
   if (!service || !barber || !date || !time) {
-    return '<span>Resumo do agendamento</span><p>Complete as etapas anteriores para revisar antes de confirmar.</p>';
+    const text = document.createElement('p');
+    text.textContent = 'Complete as etapas anteriores para revisar antes de confirmar.';
+    fragment.appendChild(text);
+    return fragment;
   }
-  return '<span>Resumo do agendamento</span><dl>'
-    + '<div><dt>Serviço</dt><dd>' + escapeHtml(service.name) + '</dd></div>'
-    + '<div><dt>Barbeiro</dt><dd>' + escapeHtml(barber.name) + '</dd></div>'
-    + '<div><dt>Data</dt><dd>' + escapeHtml(longDateLabel(date)) + '</dd></div>'
-    + '<div><dt>Horário</dt><dd>' + escapeHtml(time) + '</dd></div>'
-    + '<div><dt>Duração</dt><dd>' + escapeHtml(service.duration) + '</dd></div>'
-    + '<div><dt>Valor</dt><dd>' + money(service.price) + '</dd></div>'
-    + '<div><dt>Cliente</dt><dd>' + escapeHtml(name || '-') + '</dd></div>'
-    + '<div><dt>WhatsApp</dt><dd>' + escapeHtml(phone ? formatPhone(phone) : '-') + '</dd></div>'
-    + '</dl>';
+  const list = document.createElement('dl');
+  appendDetail(list, 'Serviço', service.name);
+  appendDetail(list, 'Barbeiro', barber.name);
+  appendDetail(list, 'Data', longDateLabel(date));
+  appendDetail(list, 'Horário', time);
+  appendDetail(list, 'Duração', service.duration);
+  appendDetail(list, 'Valor', money(service.price));
+  appendDetail(list, 'Cliente', name || '-');
+  appendDetail(list, 'WhatsApp', phone ? maskPhone(phone) : '-');
+  fragment.appendChild(list);
+  return fragment;
 }
 
 function updateScheduleSummary() {
   const summary = byId('booking-summary');
   if (!summary) return;
-  summary.innerHTML = renderConfirmationSummary();
+  summary.replaceChildren(renderConfirmationSummary());
 }
 
 function updateSteps() {
@@ -717,14 +789,11 @@ function updateSteps() {
 function validateBooking(payload) {
   const errors = [];
   if (payload.name.trim().split(/\s+/).filter(Boolean).length < 2) errors.push('Informe nome e sobrenome.');
-  if (onlyDigits(payload.phone).length !== 11) errors.push('Informe um WhatsApp válido com DDD.');
+  if (!isValidBrazilianWhatsapp(payload.phone)) errors.push('Informe um WhatsApp brasileiro válido com DDD.');
   if (!payload.serviceId) errors.push('Escolha um serviço.');
   if (!payload.barberId) errors.push('Escolha um barbeiro.');
   if (!payload.date || !isDateOpen(payload.date, payload.barberId)) errors.push('Escolha uma data disponível.');
-  if (!payload.time) {
-    errors.push('Escolha um horário.');
-    showScheduleToast('Escolha um horário livre na agenda.', 'error');
-  }
+  if (!payload.time) { errors.push('Escolha um horário.'); showScheduleToast('Escolha um horário livre na agenda.', 'error'); }
   return errors;
 }
 
@@ -735,7 +804,7 @@ function buildWhatsappMessage(appointment) {
 function renderSuccess(appointment) {
   byId('success-title').textContent = 'Agendamento confirmado';
   byId('success-code').textContent = 'Código: ' + appointment.code;
-  byId('success-details').innerHTML = appointmentDetails(appointment);
+  renderAppointmentDetails(byId('success-details'), appointment);
   byId('success-whatsapp').href = whatsappLink(business.whatsapp, buildWhatsappMessage(appointment));
   byId('success-card').hidden = false;
   document.body.style.overflow = 'hidden';
@@ -764,19 +833,29 @@ function prepareManageFromSuccess() {
   closeSuccessModal();
 }
 
-function appointmentDetails(appointment) {
-  return `
-    <p><span>Código</span><strong>${escapeHtml(appointment.code)}</strong></p>
-    <p><span>Cliente</span><strong>${escapeHtml(appointment.name)}</strong></p>
-    <p><span>WhatsApp</span><strong>${escapeHtml(formatPhone(appointment.phone))}</strong></p>
-    <p><span>Serviço</span><strong>${escapeHtml(appointment.serviceName)}</strong></p>
-    <p><span>Barbeiro</span><strong>${escapeHtml(appointment.barberName)}</strong></p>
-    <p><span>Data</span><strong>${escapeHtml(formatDate(appointment.date))} às ${escapeHtml(appointment.time)}</strong></p>
-    <p><span>Duração</span><strong>${escapeHtml(appointment.durationMinutes ? appointment.durationMinutes + ' min' : '-')}</strong></p>
-    <p><span>Valor</span><strong>${money(appointment.price)}</strong></p>
-    <p><span>Status</span><strong>${escapeHtml(statusLabels[appointment.status] || appointment.status)}</strong></p>
-    ${appointment.note ? `<p><span>Observação</span><strong>${escapeHtml(appointment.note)}</strong></p>` : ''}
-  `;
+function renderAppointmentDetails(container, appointment, options = {}) {
+  container.replaceChildren();
+  const details = [
+    ['Código', appointment.code],
+    ['Cliente', appointment.name],
+    ['WhatsApp', options.maskPhone ? maskPhone(appointment.phone) : formatPhone(appointment.phone)],
+    ['Serviço', appointment.serviceName],
+    ['Barbeiro', appointment.barberName],
+    ['Data', formatDate(appointment.date) + ' às ' + appointment.time],
+    ['Duração', appointment.durationMinutes ? appointment.durationMinutes + ' min' : '-'],
+    ['Valor', money(appointment.price)],
+    ['Status', statusLabels[appointment.status] || appointment.status]
+  ];
+  if (appointment.note) details.push(['Observação', appointment.note]);
+  details.forEach(([label, value]) => {
+    const row = document.createElement('p');
+    const span = document.createElement('span');
+    const strong = document.createElement('strong');
+    span.textContent = label;
+    strong.textContent = value || '-';
+    row.append(span, strong);
+    container.appendChild(row);
+  });
 }
 
 function submitBooking(event) {
@@ -786,7 +865,7 @@ function submitBooking(event) {
   const payload = {
     id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
     code: nextCode(),
-    name: byId('client-name').value.trim(),
+    name: sanitizeTextField(byId('client-name').value, NAME_MAX_LENGTH),
     phone: onlyDigits(byId('client-phone').value),
     serviceId: service?.id || '',
     serviceName: service?.name || '',
@@ -795,9 +874,10 @@ function submitBooking(event) {
     date: byId('booking-date').value,
     time: byId('booking-time').value,
     durationMinutes: service?.durationMinutes || schedule.intervalMinutes,
-    note: byId('booking-note').value.trim(),
+    note: sanitizeNoteField(byId('booking-note').value),
     price: service?.price || 0,
     status: 'pendente',
+    history: [historyEntry('created', { source: 'public_booking' })],
     createdAt: new Date().toISOString()
   };
 
@@ -834,46 +914,56 @@ function submitBooking(event) {
 
 function renderManageResult(appointment) {
   managedAppointmentId = appointment.id;
-  byId('manage-details').innerHTML = appointmentDetails(appointment);
+  managedAccessToken = manageTokenFor(appointment);
+  renderAppointmentDetails(byId('manage-details'), appointment, { maskPhone: true });
   byId('manage-result').hidden = false;
   byId('reschedule-form').hidden = true;
   byId('reschedule-feedback').textContent = '';
   byId('reschedule-barber').innerHTML = barberOptions(appointment.barberId);
   byId('reschedule-date').value = appointment.date;
   updateRescheduleTimes();
-  byId('manage-cancel').disabled = appointment.status === 'cancelado' || appointment.status === 'concluido';
-  byId('manage-reschedule-toggle').disabled = appointment.status === 'cancelado' || appointment.status === 'concluido';
+  const canChange = canClientModify(appointment);
+  byId('manage-cancel').disabled = !canChange;
+  byId('manage-reschedule-toggle').disabled = !canChange;
 }
 
 function submitManage(event) {
   event.preventDefault();
+  const feedback = byId('manage-feedback');
+  const state = getManageAttemptState();
+  if (state.lockUntil && state.lockUntil > Date.now()) {
+    const minutes = Math.ceil((state.lockUntil - Date.now()) / 60000);
+    feedback.textContent = `Muitas tentativas incorretas. Tente novamente em cerca de ${minutes} minuto(s).`;
+    feedback.className = 'form-feedback error';
+    return;
+  }
   const phone = onlyDigits(byId('manage-phone').value);
   const code = normalizeCode(byId('manage-code').value);
   const appointment = loadAppointments().find(item => item.phone === phone && normalizeCode(item.code) === code);
-  const feedback = byId('manage-feedback');
-
-  if (!phone || onlyDigits(phone).length !== 11 || !code) {
-    feedback.textContent = 'Informe WhatsApp com DDD e código do agendamento.';
-    feedback.className = 'form-feedback error';
-    return;
-  }
-
-  if (!appointment) {
-    feedback.textContent = 'Agendamento não encontrado. Confira o WhatsApp e o código.';
-    feedback.className = 'form-feedback error';
+  if (!isValidBrazilianWhatsapp(phone) || !code || !appointment) {
+    managedAppointmentId = '';
+    managedAccessToken = '';
     byId('manage-result').hidden = true;
+    const nextState = registerManageFailure();
+    feedback.textContent = nextState.lockUntil ? 'Muitas tentativas incorretas. Tente novamente em alguns minutos.' : GENERIC_MANAGE_ERROR;
+    feedback.className = 'form-feedback error';
     return;
   }
-
+  clearManageAttempts();
   feedback.textContent = 'Agendamento encontrado.';
   feedback.className = 'form-feedback ok';
   renderManageResult(appointment);
 }
 
 function cancelManagedAppointment() {
-  if (!managedAppointmentId) return;
+  const appointment = getAppointment(managedAppointmentId);
+  if (!canClientModify(appointment)) {
+    byId('manage-feedback').textContent = 'Este agendamento não permite alteração.';
+    byId('manage-feedback').className = 'form-feedback error';
+    return;
+  }
   if (!confirm('Cancelar este agendamento?')) return;
-  const updated = setAppointment(managedAppointmentId, { status: 'cancelado' });
+  const updated = setAppointment(managedAppointmentId, { status: 'cancelado' }, historyEntry('client_cancelled'));
   if (updated) renderManageResult(updated);
   byId('manage-feedback').textContent = 'Agendamento cancelado.';
   byId('manage-feedback').className = 'form-feedback ok';
@@ -882,18 +972,20 @@ function cancelManagedAppointment() {
 function submitReschedule(event) {
   event.preventDefault();
   const appointment = getAppointment(managedAppointmentId);
-  if (!appointment) return;
+  const feedback = byId('reschedule-feedback');
+  if (!canClientModify(appointment)) {
+    feedback.textContent = 'Este agendamento não permite alteração.';
+    feedback.className = 'form-feedback error';
+    return;
+  }
   const barber = barbers.find(item => item.id === byId('reschedule-barber').value);
   const date = byId('reschedule-date').value;
   const time = byId('reschedule-time').value;
-  const feedback = byId('reschedule-feedback');
-
   if (!barber || !date || !time || !isDateOpen(date, barber.id)) {
     feedback.textContent = 'Escolha barbeiro, data e horário disponíveis.';
     feedback.className = 'form-feedback error';
     return;
   }
-
   const service = services.find(item => item.id === appointment.serviceId);
   if (!isSlotAvailable(date, barber.id, time, service, appointment.id)) {
     feedback.textContent = 'Este horário ficou ocupado ou não comporta a duração do serviço. Escolha outro horário.';
@@ -901,14 +993,10 @@ function submitReschedule(event) {
     updateRescheduleTimes();
     return;
   }
-
-  const updated = setAppointment(appointment.id, {
-    barberId: barber.id,
-    barberName: barber.name,
-    date,
-    time,
-    status: 'pendente'
-  });
+  const updated = setAppointment(appointment.id, { barberId: barber.id, barberName: barber.name, date, time, status: 'pendente' }, historyEntry('client_rescheduled', {
+    from: { barberId: appointment.barberId, date: appointment.date, time: appointment.time },
+    to: { barberId: barber.id, date, time }
+  }));
   feedback.textContent = 'Agendamento reagendado com sucesso.';
   feedback.className = 'form-feedback ok';
   renderManageResult(updated);
@@ -950,6 +1038,10 @@ function attachEvents() {
     if (bookingServiceButton) selectService(bookingServiceButton.dataset.bookingService);
     if (bookingBarberButton) selectBarber(bookingBarberButton.dataset.bookingBarber);
   });
+  byId('client-name').setAttribute('maxlength', String(NAME_MAX_LENGTH));
+  byId('booking-note').setAttribute('maxlength', String(NOTE_MAX_LENGTH));
+  byId('client-name').addEventListener('input', event => { event.target.value = sanitizeTextField(event.target.value, NAME_MAX_LENGTH); });
+  byId('booking-note').addEventListener('input', event => { event.target.value = sanitizeNoteField(event.target.value); });
   ['booking-service', 'booking-barber', 'client-name', 'client-phone'].forEach(id => {
     byId(id).addEventListener('input', () => { updateSteps(); updateBookingVisibility(); updateScheduleSummary(); });
     byId(id).addEventListener('change', () => { updateSteps(); updateBookingVisibility(); updateScheduleSummary(); });

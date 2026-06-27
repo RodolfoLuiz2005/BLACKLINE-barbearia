@@ -251,17 +251,18 @@
               <div class="client-fields">
                 <label>
                   Nome do cliente *
-                  <input id="client-name" name="name" type="text" autocomplete="name" />
+                  <input id="client-name" name="name" type="text" autocomplete="name" maxlength="80" />
                 </label>
                 <label>
                   WhatsApp *
-                  <input id="client-phone" name="phone" type="tel" inputmode="numeric" autocomplete="tel" />
+                  <input id="client-phone" name="phone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="15" />
                 </label>
                 <label class="full">
                   Observação opcional
-                  <textarea id="booking-note" name="note" rows="3"></textarea>
+                  <textarea id="booking-note" name="note" rows="3" maxlength="300"></textarea>
                 </label>
               </div>
+              <p class="privacy-note">Usamos seus dados apenas para confirmar e gerenciar seu agendamento. <a href="#privacidade">Política de Privacidade</a></p>
               <div class="step-actions">
                 <button class="btn btn-secondary" type="button" data-step-prev>Voltar</button>
                 <button class="btn btn-primary" type="button" id="customer-continue" disabled>Continuar</button>
@@ -390,6 +391,14 @@
         </div>
         <iframe id="business-map" title="Mapa da Blackline Barbearia" loading="lazy"
           src="https://www.google.com/maps?q=Av.%20Boa%20Viagem%201250%20Recife%20PE&output=embed"></iframe>
+      </div>
+    </section>
+
+    <section class="section privacy-section" id="privacidade">
+      <div class="section-heading">
+        <p class="eyebrow">Privacidade</p>
+        <h2>Política de Privacidade</h2>
+        <p>Usamos nome, WhatsApp e dados do agendamento apenas para confirmar, gerenciar, reagendar ou cancelar seu horário. As informações ficam armazenadas localmente neste sistema e não são vendidas ou compartilhadas para publicidade.</p>
       </div>
     </section>
   </main>
