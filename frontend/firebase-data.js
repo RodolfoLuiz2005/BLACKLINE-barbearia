@@ -323,6 +323,33 @@ export async function rescheduleFirebaseAppointment(appointment, phone, code, ne
   return updated;
 }
 
+export async function getAvailability({ barberId = '', date = '', times = [], slotIds = [] } = {}) {
+  const requestedSlotIds = Array.isArray(slotIds) && slotIds.length
+    ? slotIds
+    : (barberId && date && Array.isArray(times) ? times.map(time => makeAppointmentSlotId(barberId, date, time)) : []);
+  if (!requestedSlotIds.length) return new Map();
+  return loadFirebaseOccupiedSlots(requestedSlotIds);
+}
+
+export async function createAppointment(payload) {
+  return createFirebaseAppointment(payload);
+}
+
+export async function getAppointmentByPhoneAndCode(phone, code) {
+  return getFirebaseAppointmentByClient(phone, code);
+}
+
+export async function cancelAppointmentByCode(phone, code) {
+  const appointment = await getFirebaseAppointmentByClient(phone, code);
+  if (!appointment) throw makeFirebaseError('not-found', 'Agendamento nao encontrado.');
+  return cancelFirebaseAppointment(appointment, phone, code);
+}
+
+export async function rescheduleAppointmentByCode(phone, code, payload) {
+  const appointment = await getFirebaseAppointmentByClient(phone, code);
+  if (!appointment) throw makeFirebaseError('not-found', 'Agendamento nao encontrado.');
+  return rescheduleFirebaseAppointment(appointment, phone, code, payload);
+}
 export function isSlotTakenError(error) {
   return error?.code === 'slot-taken' || String(error?.message || '').toLowerCase().includes('horario ja reservado');
 }

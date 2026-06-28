@@ -6,7 +6,7 @@ const statusLabels = {
   pendente: 'Pendente',
   confirmado: 'Confirmado',
   em_atendimento: 'Em atendimento',
-  concluido: 'ConcluÃ­do',
+  concluido: 'Concluído',
   cancelado: 'Cancelado'
 };
 const BOOKING_BLOCKING_STATUSES = new Set(['pendente', 'confirmado', 'em_atendimento']);
@@ -17,14 +17,21 @@ const MANAGE_MAX_ATTEMPTS = 5;
 const MANAGE_LOCK_MS = 5 * 60 * 1000;
 const NAME_MAX_LENGTH = 80;
 const NOTE_MAX_LENGTH = 300;
-const GENERIC_MANAGE_ERROR = 'NÃ£o foi possÃ­vel consultar o agendamento. Confira os dados e tente novamente.';
+const GENERIC_MANAGE_ERROR = 'Não foi possível consultar o agendamento. Confira os dados e tente novamente.';
+const HERO_VIDEO_TIMEOUT_MS = 2500;
+const HERO_IMAGE_ONLY_QUERY = '(max-width: 720px), (prefers-reduced-motion: reduce), (prefers-reduced-data: reduce)';
+const ONLINE_ACTION_ERROR = 'Nao foi possivel concluir esta acao online. Fale conosco pelo WhatsApp.';
 
 let managedAppointmentId = '';
 let managedAccessToken = '';
+let bookingSubmitInFlight = false;
+let lastFocusedElementBeforeSuccess = null;
+let heroMediaQueryList = null;
+let heroMediaFallbackTimer = 0;
 let currentStep = 0;
 const BOOKING_STEP_COUNT = 6;
 const TIME_PERIODS = [
-  { label: 'ManhÃ£', slots: ['09:00', '09:30', '10:00', '10:30', '11:00'] },
+  { label: 'Manhã', slots: ['09:00', '09:30', '10:00', '10:30', '11:00'] },
   { label: 'Tarde', slots: ['14:00', '14:30', '15:00', '15:30', '16:00'] },
   { label: 'Noite', slots: ['17:00', '17:30', '18:00', '18:30', '19:00'] }
 ];
@@ -32,10 +39,10 @@ const BOOKABLE_TIME_SLOTS = TIME_PERIODS.flatMap(period => period.slots);
 let calendarCursor = new Date();
 calendarCursor.setDate(1);
 calendarCursor.setHours(12, 0, 0, 0);
-const WEEKDAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'SÃ¡b'];
-const WEEKDAYS_LONG = ['Domingo', 'Segunda', 'TerÃ§a', 'Quarta', 'Quinta', 'Sexta', 'SÃ¡bado'];
+const WEEKDAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const WEEKDAYS_LONG = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 const MONTHS_SHORT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-const MONTHS_LONG = ['janeiro', 'fevereiro', 'marÃ§o', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const MONTHS_LONG = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 
 function byId(id) {
   return document.getElementById(id);
@@ -98,7 +105,7 @@ function sanitizeNoteField(value) {
 }
 function maskPhone(value) {
   const digits = onlyDigits(value);
-  if (digits.length < 4) return 'â€¢â€¢â€¢â€¢';
+  if (digits.length < 4) return '••••';
   return `(**) *****-${digits.slice(-4)}`;
 }
 
@@ -199,7 +206,7 @@ function nextCode() {
     const code = `BLK-${randomCodeSuffix()}`;
     if (!existing.has(code)) return code;
   }
-  throw new Error('NÃ£o foi possÃ­vel gerar um cÃ³digo seguro. Tente novamente.');
+  throw new Error('Não foi possível gerar um código seguro. Tente novamente.');
 }
 
 function minutesFromTime(value) {
@@ -318,7 +325,7 @@ function getNextAvailableDays(daysCount = 7) {
       monthShort: MONTHS_SHORT[date.getMonth()],
       monthLong: MONTHS_LONG[date.getMonth()],
       available: open && slots.length > 0,
-      availabilityText: open && slots.length > 0 ? slots.length + ' livres' : 'Sem horÃ¡rios'
+      availabilityText: open && slots.length > 0 ? slots.length + ' livres' : 'Sem horários'
     };
   });
 }
@@ -348,7 +355,7 @@ function getTimeSlotsByDay(dateValue, barberId, ignoreId = '') {
       time,
       period: periodFor(time),
       available,
-      status: available ? 'DisponÃ­vel' : bookedByExisting ? 'Ocupado' : 'IndisponÃ­vel'
+      status: available ? 'Disponível' : bookedByExisting ? 'Ocupado' : 'Indisponível'
     };
   });
 }
@@ -395,22 +402,73 @@ function registerManageFailure() {
   return nextState;
 }
 
+function setHeroFallbackState(active) {
+  document.body.classList.toggle('hero-video-failed', Boolean(active));
+}
+
+function shouldUseHeroImageOnly() {
+  return Boolean(window.matchMedia?.(HERO_IMAGE_ONLY_QUERY).matches);
+}
+
+function clearHeroVideo(video, source) {
+  if (source) source.removeAttribute('src');
+  if (video) {
+    video.pause?.();
+    video.removeAttribute('src');
+    video.load?.();
+  }
+}
+
+function bindHeroMediaQuery() {
+  if (heroMediaQueryList || !window.matchMedia) return;
+  heroMediaQueryList = window.matchMedia(HERO_IMAGE_ONLY_QUERY);
+  heroMediaQueryList.addEventListener?.('change', () => setHeroMedia());
+}
+
 function setHeroMedia() {
   const video = byId('hero-video');
   const source = byId('hero-video-source');
   const fallback = byId('hero-fallback');
-  const fallbackImage = assets.heroFallback || '/og-image.jpg';
+  const fallbackImage = assets.heroFallback || business.ogImage || '/og-image.jpg';
 
-  if (source && assets.heroVideo) source.src = assets.heroVideo;
+  bindHeroMediaQuery();
+  window.clearTimeout(heroMediaFallbackTimer);
+
+  if (fallback) fallback.style.backgroundImage = 'url("' + fallbackImage + '")';
   if (video) video.poster = fallbackImage;
-  if (fallback) fallback.style.backgroundImage = `url('${fallbackImage}')`;
-  if (video && assets.heroVideo) video.load();
 
-  const showFallback = () => document.body.classList.add('hero-video-failed');
-  video?.addEventListener('error', showFallback);
-  source?.addEventListener('error', showFallback);
+  const showFallback = () => {
+    window.clearTimeout(heroMediaFallbackTimer);
+    document.body.classList.remove('hero-video-ready');
+    setHeroFallbackState(true);
+    clearHeroVideo(video, source);
+  };
+
+  if (!video || !source || !assets.heroVideo || shouldUseHeroImageOnly()) {
+    showFallback();
+    return;
+  }
+
+  document.body.classList.remove('hero-video-ready');
+  setHeroFallbackState(false);
+
+  const markReady = () => {
+    window.clearTimeout(heroMediaFallbackTimer);
+    setHeroFallbackState(false);
+    document.body.classList.add('hero-video-ready');
+  };
+
+  video.addEventListener('loadeddata', markReady, { once: true });
+  video.addEventListener('canplay', markReady, { once: true });
+  video.addEventListener('error', showFallback, { once: true });
+  source.addEventListener('error', showFallback, { once: true });
+
+  source.src = assets.heroVideo;
+  video.load();
+  heroMediaFallbackTimer = window.setTimeout(showFallback, HERO_VIDEO_TIMEOUT_MS);
+  const playback = video.play?.();
+  if (playback?.catch) playback.catch(showFallback);
 }
-
 function renderServices() {
   byId('services-grid').innerHTML = services.map((service, index) => `
     <article class="service-card reveal" style="--delay:${index * 70}ms">
@@ -420,7 +478,7 @@ function renderServices() {
       </div>
       <h3>${escapeHtml(service.name)}</h3>
       <p>${escapeHtml(service.description)}</p>
-      <button class="ghost-button" type="button" data-service="${escapeHtml(service.id)}">Agendar este serviÃ§o</button>
+      <button class="ghost-button" type="button" data-service="${escapeHtml(service.id)}">Agendar este serviço</button>
     </article>
   `).join('');
 }
@@ -450,7 +508,7 @@ function renderTestimonials() {
 }
 
 function serviceOptions(selected = '') {
-  return '<option value="">Escolha o serviÃ§o</option>' + services
+  return '<option value="">Escolha o serviço</option>' + services
     .map(service => `<option value="${escapeHtml(service.id)}" ${service.id === selected ? 'selected' : ''}>${escapeHtml(service.name)} - ${money(service.price)}</option>`)
     .join('');
 }
@@ -491,17 +549,17 @@ function setMinDate() {
 }
 
 function fillTimeSelect(select, slots) {
-  select.innerHTML = '<option value="">Escolha o horÃ¡rio</option>' + slots.map(time => `<option value="${time}">${time}</option>`).join('');
-  if (!slots.length) select.innerHTML = '<option value="">Sem horÃ¡rios disponÃ­veis</option>';
+  select.innerHTML = '<option value="">Escolha o horário</option>' + slots.map(time => `<option value="${time}">${time}</option>`).join('');
+  if (!slots.length) select.innerHTML = '<option value="">Sem horários disponíveis</option>';
 }
 
 function clearSelectedDateTime() {
   byId('booking-date').value = '';
   byId('booking-time').value = '';
   byId('selected-day-label').textContent = byId('booking-service').value && byId('booking-barber').value
-    ? 'Escolha uma data no calendÃ¡rio.'
-    : 'Escolha serviÃ§o e barbeiro para liberar a data.';
-  byId('selected-time-label').textContent = 'Selecione uma data para ver os horÃ¡rios.';
+    ? 'Escolha uma data no calendário.'
+    : 'Escolha serviço e barbeiro para liberar a data.';
+  byId('selected-time-label').textContent = 'Selecione uma data para ver os horários.';
 }
 
 function hasAvailableTimes(dateValue, barberId) {
@@ -565,10 +623,10 @@ function renderMiniCalendar() {
   byId('calendar-month-label').textContent = calendarMonthLabel(calendarCursor);
   byId('calendar-prev').disabled = calendarCursor <= new Date(new Date().getFullYear(), new Date().getMonth(), 1, 12, 0, 0, 0);
   daysWrapper.setAttribute('role', 'grid');
-  daysWrapper.setAttribute('aria-label', 'Dias disponÃ­veis para agendamento em ' + calendarMonthLabel(calendarCursor));
+  daysWrapper.setAttribute('aria-label', 'Dias disponíveis para agendamento em ' + calendarMonthLabel(calendarCursor));
 
   if (!unlocked) {
-    daysWrapper.innerHTML = '<p class="picker-empty calendar-empty">Escolha serviÃ§o e barbeiro.</p>';
+    daysWrapper.innerHTML = '<p class="picker-empty calendar-empty">Escolha serviço e barbeiro.</p>';
     calendar.hidden = true;
     return;
   }
@@ -680,7 +738,7 @@ function renderAvailableTimes(dateValue, barberId, selectedTime) {
       + '</div></section>';
   }).join('');
 
-  return content || '<p class="picker-empty">Nenhum horÃ¡rio livre para esta data.</p>';
+  return content || '<p class="picker-empty">Nenhum horário livre para esta data.</p>';
 }
 function renderTimeGroups() {
   const wrapper = byId('time-groups');
@@ -766,6 +824,17 @@ function prevStep() {
   goToStep(currentStep - 1);
 }
 
+function setBookingSubmitting(isSubmitting) {
+  bookingSubmitInFlight = Boolean(isSubmitting);
+  const button = byId('booking-submit');
+  if (!button) return;
+  const ready = Boolean(byId('booking-time')?.value) && customerDataReady();
+  button.disabled = bookingSubmitInFlight || !ready;
+  button.classList.toggle('is-loading', bookingSubmitInFlight);
+  button.setAttribute('aria-busy', bookingSubmitInFlight ? 'true' : 'false');
+  button.textContent = bookingSubmitInFlight ? 'Confirmando...' : 'Confirmar agendamento';
+}
+
 function updateBookingVisibility() {
   const serviceSelected = Boolean(byId('booking-service').value);
   const barberSelected = Boolean(byId('booking-barber').value);
@@ -775,9 +844,10 @@ function updateBookingVisibility() {
 
   byId('calendar-toggle').disabled = !(serviceSelected && barberSelected);
   byId('customer-continue').disabled = !clientReady;
-  byId('booking-submit').disabled = !(timeSelected && clientReady);
+  const submit = byId('booking-submit');
+  if (submit) submit.disabled = bookingSubmitInFlight || !(dateSelected && timeSelected && clientReady);
+  setBookingSubmitting(bookingSubmitInFlight);
 }
-
 function showScheduleToast(message, type = 'ok') {
   let toast = byId('schedule-toast');
   if (!toast) {
@@ -871,10 +941,57 @@ async function updateRescheduleTimes() {
   }
 }
 
-function scrollToBooking() {
-  byId('agendamento').scrollIntoView({ behavior: 'smooth', block: 'start' });
+function headerOffset() {
+  const header = byId('site-header');
+  return (header?.offsetHeight || 76) + 14;
 }
 
+function scrollToSection(target, behavior = 'smooth') {
+  const element = typeof target === 'string' ? document.querySelector(target) : target;
+  if (!element) return;
+  const top = element.getBoundingClientRect().top + window.scrollY - headerOffset();
+  window.scrollTo({ top: Math.max(0, top), behavior });
+}
+
+function setMobileMenu(open) {
+  const nav = byId('site-nav');
+  const toggle = byId('menu-toggle');
+  if (!nav || !toggle) return;
+  nav.classList.toggle('open', Boolean(open));
+  toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  toggle.setAttribute('aria-label', open ? 'Fechar menu' : 'Abrir menu');
+}
+
+function closeMobileMenu() {
+  setMobileMenu(false);
+}
+
+function toggleMobileMenu() {
+  const nav = byId('site-nav');
+  setMobileMenu(!nav?.classList.contains('open'));
+}
+
+function handleAnchorNavigation(event) {
+  const link = event.target.closest('a[href^="#"]');
+  if (!link) return;
+  const href = link.getAttribute('href');
+  if (!href || href === '#') return;
+  let target = null;
+  try {
+    target = document.querySelector(href);
+  } catch {
+    return;
+  }
+  if (!target) return;
+  event.preventDefault();
+  closeMobileMenu();
+  scrollToSection(target);
+  if (history.pushState) history.pushState(null, '', href);
+}
+
+function scrollToBooking() {
+  scrollToSection('#agendamento');
+}
 function updateSelectedCards() {
   const serviceId = byId('booking-service').value;
   const barberId = byId('booking-barber').value;
@@ -935,11 +1052,11 @@ function renderConfirmationSummary() {
     return fragment;
   }
   const list = document.createElement('dl');
-  appendDetail(list, 'ServiÃ§o', service.name);
+  appendDetail(list, 'Serviço', service.name);
   appendDetail(list, 'Barbeiro', barber.name);
   appendDetail(list, 'Data', longDateLabel(date));
-  appendDetail(list, 'HorÃ¡rio', time);
-  appendDetail(list, 'DuraÃ§Ã£o', service.duration);
+  appendDetail(list, 'Horário', time);
+  appendDetail(list, 'Duração', service.duration);
   appendDetail(list, 'Valor', money(service.price));
   appendDetail(list, 'Cliente', name || '-');
   appendDetail(list, 'WhatsApp', phone ? maskPhone(phone) : '-');
@@ -964,51 +1081,63 @@ function updateSteps() {
     customerDataReady() && Boolean(byId('booking-time').value)
   ];
   steps.forEach((step, index) => {
+    const unlocked = canAccessStep(index);
     step.classList.toggle('done', index < currentStep && completed[index]);
     step.classList.toggle('current', index === currentStep);
     step.classList.toggle('active', index <= currentStep);
+    step.classList.toggle('is-blocked', !unlocked);
+    step.setAttribute('aria-disabled', unlocked ? 'false' : 'true');
   });
 }
-
 function validateBooking(payload) {
   const errors = [];
   if (payload.name.trim().split(/\s+/).filter(Boolean).length < 2) errors.push('Informe nome e sobrenome.');
-  if (!isValidBrazilianWhatsapp(payload.phone)) errors.push('Informe um WhatsApp brasileiro vÃ¡lido com DDD.');
-  if (!payload.serviceId) errors.push('Escolha um serviÃ§o.');
+  if (!isValidBrazilianWhatsapp(payload.phone)) errors.push('Informe um WhatsApp brasileiro válido com DDD.');
+  if (!payload.serviceId) errors.push('Escolha um serviço.');
   if (!payload.barberId) errors.push('Escolha um barbeiro.');
-  if (!payload.date || !isDateOpen(payload.date, payload.barberId)) errors.push('Escolha uma data disponÃ­vel.');
-  if (!payload.time) { errors.push('Escolha um horÃ¡rio.'); showScheduleToast('Escolha um horÃ¡rio livre na agenda.', 'error'); }
+  if (!payload.date || !isDateOpen(payload.date, payload.barberId)) errors.push('Escolha uma data disponível.');
+  if (!payload.time) { errors.push('Escolha um horário.'); showScheduleToast('Escolha um horário livre na agenda.', 'error'); }
   return errors;
 }
 
 function buildWhatsappMessage(appointment) {
-  return `OlÃ¡, quero confirmar meu agendamento na ${business.name}.\n\nNome: ${appointment.name}\nServiÃ§o: ${appointment.serviceName}\nBarbeiro: ${appointment.barberName}\nData: ${formatDate(appointment.date)}\nHorÃ¡rio: ${appointment.time}\nCÃ³digo: ${appointment.code}`;
+  return `Olá, quero confirmar meu agendamento na ${business.name}.\n\nNome: ${appointment.name}\nServiço: ${appointment.serviceName}\nBarbeiro: ${appointment.barberName}\nData: ${formatDate(appointment.date)}\nHorário: ${appointment.time}\nCódigo: ${appointment.code}`;
 }
 
 function renderSuccess(appointment) {
+  lastFocusedElementBeforeSuccess = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const modal = byId('success-card');
+  const dialog = modal?.querySelector('[role="dialog"]');
   byId('success-title').textContent = 'Agendamento confirmado';
-  byId('success-code').textContent = 'CÃ³digo: ' + appointment.code;
+  byId('success-code').textContent = 'Codigo: ' + appointment.code;
   renderAppointmentDetails(byId('success-details'), appointment);
   byId('success-whatsapp').href = whatsappLink(business.whatsapp, buildWhatsappMessage(appointment));
-  byId('success-card').hidden = false;
-  document.body.style.overflow = 'hidden';
+  modal.hidden = false;
+  document.body.classList.add('modal-open');
+  window.requestAnimationFrame(() => dialog?.focus({ preventScroll: true }));
 }
 
 function closeSuccessModal() {
-  byId('success-card').hidden = true;
+  const modal = byId('success-card');
+  if (!modal || modal.hidden) return;
+  modal.hidden = true;
+  document.body.classList.remove('modal-open');
   document.body.style.overflow = '';
+  if (lastFocusedElementBeforeSuccess && document.contains(lastFocusedElementBeforeSuccess)) {
+    lastFocusedElementBeforeSuccess.focus({ preventScroll: true });
+  }
+  lastFocusedElementBeforeSuccess = null;
 }
 
 async function copySuccessCode() {
-  const code = byId('success-code').textContent.replace('CÃ³digo: ', '').trim();
+  const code = byId('success-code').textContent.replace(/^C[oó]digo:\s*/i, '').replace(/^Codigo:\s*/i, '').trim();
   try {
     await navigator.clipboard.writeText(code);
-    showScheduleToast('CÃ³digo copiado.');
+    showScheduleToast('Codigo copiado.');
   } catch {
-    showScheduleToast('CÃ³digo: ' + code);
+    showScheduleToast('Codigo: ' + code);
   }
 }
-
 function prepareManageFromSuccess() {
   const last = loadAppointments().slice(-1)[0];
   if (!last) return;
@@ -1020,17 +1149,17 @@ function prepareManageFromSuccess() {
 function renderAppointmentDetails(container, appointment, options = {}) {
   container.replaceChildren();
   const details = [
-    ['CÃ³digo', appointment.code],
+    ['Código', appointment.code],
     ['Cliente', appointment.name],
     ['WhatsApp', options.maskPhone ? maskPhone(appointment.phone) : formatPhone(appointment.phone)],
-    ['ServiÃ§o', appointment.serviceName],
+    ['Serviço', appointment.serviceName],
     ['Barbeiro', appointment.barberName],
-    ['Data', formatDate(appointment.date) + ' Ã s ' + appointment.time],
-    ['DuraÃ§Ã£o', appointment.durationMinutes ? appointment.durationMinutes + ' min' : '-'],
+    ['Data', formatDate(appointment.date) + ' às ' + appointment.time],
+    ['Duração', appointment.durationMinutes ? appointment.durationMinutes + ' min' : '-'],
     ['Valor', money(appointment.price)],
     ['Status', statusLabels[appointment.status] || appointment.status]
   ];
-  if (appointment.note) details.push(['ObservaÃ§Ã£o', appointment.note]);
+  if (appointment.note) details.push(['Observação', appointment.note]);
   details.forEach(([label, value]) => {
     const row = document.createElement('p');
     const span = document.createElement('span');
@@ -1044,81 +1173,96 @@ function renderAppointmentDetails(container, appointment, options = {}) {
 
 async function submitBooking(event) {
   event.preventDefault();
-  const service = services.find(item => item.id === byId('booking-service').value);
-  const barber = barbers.find(item => item.id === byId('booking-barber').value);
-  const payload = {
-    id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-    code: nextCode(),
-    name: sanitizeTextField(byId('client-name').value, NAME_MAX_LENGTH),
-    phone: onlyDigits(byId('client-phone').value),
-    serviceId: service?.id || '',
-    serviceName: service?.name || '',
-    barberId: barber?.id || '',
-    barberName: barber?.name || '',
-    date: byId('booking-date').value,
-    time: byId('booking-time').value,
-    durationMinutes: service?.durationMinutes || schedule.intervalMinutes,
-    note: sanitizeNoteField(byId('booking-note').value),
-    price: service?.price || 0,
-    status: 'pendente',
-    history: [historyEntry('created', { source: 'public_booking' })],
-    createdAt: new Date().toISOString()
-  };
+  if (bookingSubmitInFlight) return;
 
-  const errors = validateBooking(payload);
   const feedback = byId('form-feedback');
-  if (errors.length) {
-    feedback.textContent = errors.join(' ');
-    feedback.className = 'form-feedback error';
-    return;
-  }
-
-  payload.slotIds = appointmentSlotIds(payload, service);
+  setBookingSubmitting(true);
 
   try {
-    await ensureSlotOccupancyLoaded(payload.date, payload.barberId);
-  } catch (err) {
-    console.error('Falha ao validar disponibilidade antes de criar.', err);
-    feedback.textContent = 'Nao foi possivel consultar a agenda online. Tente novamente em alguns instantes.';
-    feedback.className = 'form-feedback error';
-    return;
-  }
+    const service = services.find(item => item.id === byId('booking-service').value);
+    const barber = barbers.find(item => item.id === byId('booking-barber').value);
+    const payload = {
+      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+      code: nextCode(),
+      name: sanitizeTextField(byId('client-name').value, NAME_MAX_LENGTH),
+      phone: onlyDigits(byId('client-phone').value),
+      serviceId: service?.id || '',
+      serviceName: service?.name || '',
+      barberId: barber?.id || '',
+      barberName: barber?.name || '',
+      date: byId('booking-date').value,
+      time: byId('booking-time').value,
+      durationMinutes: service?.durationMinutes || schedule.intervalMinutes,
+      note: sanitizeNoteField(byId('booking-note').value),
+      price: service?.price || 0,
+      status: 'pendente',
+      history: [historyEntry('created', { source: 'public_booking' })],
+      createdAt: new Date().toISOString()
+    };
 
-  if (!isSlotAvailable(payload.date, payload.barberId, payload.time, service)) {
-    feedback.textContent = 'Este horÃ¡rio ficou ocupado ou nÃ£o comporta a duraÃ§Ã£o do serviÃ§o. Escolha outro horÃ¡rio.';
-    feedback.className = 'form-feedback error';
-    showScheduleToast('Escolha outro horÃ¡rio disponÃ­vel.', 'error');
+    const errors = validateBooking(payload);
+    if (errors.length) {
+      feedback.textContent = errors.join(' ');
+      feedback.className = 'form-feedback error';
+      return;
+    }
+
+    payload.slotIds = appointmentSlotIds(payload, service);
+    feedback.textContent = 'Validando disponibilidade online...';
+    feedback.className = 'form-feedback';
+
+    try {
+      await ensureSlotOccupancyLoaded(payload.date, payload.barberId);
+    } catch (err) {
+      console.error('Falha ao validar disponibilidade antes de criar.', err);
+      feedback.textContent = 'Nao foi possivel consultar a agenda online. Tente novamente em alguns instantes.';
+      feedback.className = 'form-feedback error';
+      return;
+    }
+
+    if (!isSlotAvailable(payload.date, payload.barberId, payload.time, service)) {
+      feedback.textContent = 'Este horario ficou ocupado ou nao comporta a duracao do servico. Escolha outro horario.';
+      feedback.className = 'form-feedback error';
+      showScheduleToast('Escolha outro horario disponivel.', 'error');
+      await updateTimes();
+      return;
+    }
+
+    let savedAppointment;
+    feedback.textContent = 'Salvando agendamento online...';
+    feedback.className = 'form-feedback';
+    try {
+      savedAppointment = await createFirebaseAppointment(payload);
+    } catch (err) {
+      console.error('Falha ao registrar agendamento no Firebase.', err);
+      feedback.textContent = isSlotTakenError(err)
+        ? 'Este horario acabou de ser reservado por outro cliente. Escolha outro horario.'
+        : 'Nao foi possivel registrar o agendamento agora. Tente novamente em alguns instantes.';
+      feedback.className = 'form-feedback error';
+      await updateTimes();
+      return;
+    }
+
+    rememberAppointment(savedAppointment);
+    updateCachedSlotsForAppointment(savedAppointment);
+    feedback.textContent = 'Agendamento registrado. Guarde seu codigo para consultar depois.';
+    feedback.className = 'form-feedback ok';
+    event.target.reset();
+    clearSelectedDateTime();
+    closeMiniCalendar();
+    updateSelectedCards();
     await updateTimes();
-    return;
-  }
-
-  let savedAppointment;
-  try {
-    savedAppointment = await createFirebaseAppointment(payload);
+    updateBookingVisibility();
+    goToStep(0);
+    renderSuccess(savedAppointment);
   } catch (err) {
-    console.error('Falha ao registrar agendamento no Firebase.', err);
-    feedback.textContent = isSlotTakenError(err)
-      ? 'Este horario acabou de ser reservado por outro cliente. Escolha outro horario.'
-      : 'Nao foi possivel registrar o agendamento agora. Tente novamente em alguns instantes.';
+    console.error('Falha inesperada ao concluir agendamento.', err);
+    feedback.textContent = ONLINE_ACTION_ERROR;
     feedback.className = 'form-feedback error';
-    await updateTimes();
-    return;
+  } finally {
+    setBookingSubmitting(false);
   }
-
-  rememberAppointment(savedAppointment);
-  updateCachedSlotsForAppointment(savedAppointment);
-  feedback.textContent = 'Agendamento registrado. Guarde seu codigo para consultar depois.';
-  feedback.className = 'form-feedback ok';
-  event.target.reset();
-  clearSelectedDateTime();
-  closeMiniCalendar();
-  updateSelectedCards();
-  await updateTimes();
-  updateBookingVisibility();
-  goToStep(0);
-  renderSuccess(savedAppointment);
 }
-
 function renderManageResult(appointment) {
   managedAppointmentId = appointment.id;
   managedAccessToken = manageTokenFor(appointment);
@@ -1306,11 +1450,26 @@ function maskPhoneInput(event) {
 }
 
 function attachEvents() {
-  byId('menu-toggle').addEventListener('click', () => byId('site-nav').classList.toggle('open'));
-  document.querySelectorAll('.site-nav a').forEach(link => link.addEventListener('click', () => byId('site-nav').classList.remove('open')));
+  byId('menu-toggle').addEventListener('click', event => {
+    event.stopPropagation();
+    toggleMobileMenu();
+  });
   window.addEventListener('scroll', () => byId('site-header').classList.toggle('scrolled', window.scrollY > 24));
-  window.addEventListener('resize', updateSliderHeight);
+  window.addEventListener('resize', () => {
+    updateSliderHeight();
+    if (window.innerWidth > 720) closeMobileMenu();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    closeMobileMenu();
+    closeSuccessModal();
+    closeMiniCalendar();
+  });
   document.addEventListener('click', event => {
+    handleAnchorNavigation(event);
+    if (!event.target.closest('.site-header')) closeMobileMenu();
+    if (event.target === byId('success-card')) closeSuccessModal();
+
     const serviceButton = event.target.closest('[data-service]');
     const barberButton = event.target.closest('[data-barber]');
     const bookingServiceButton = event.target.closest('[data-booking-service]');
@@ -1371,7 +1530,6 @@ function attachEvents() {
   byId('reschedule-date').addEventListener('change', updateRescheduleTimes);
   byId('reschedule-form').addEventListener('submit', submitReschedule);
 }
-
 function initReveal() {
   const observer = new IntersectionObserver(entries => {
     entries.forEach(entry => {
