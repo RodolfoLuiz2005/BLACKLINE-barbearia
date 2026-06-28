@@ -1,7 +1,9 @@
 import { BLACKLINE_CONFIG } from './blackline-config.js';
 import { cancelFirebaseAppointment, createFirebaseAppointment, getFirebaseAppointmentByClient, isPermissionError, isSlotTakenError, loadFirebaseOccupiedSlots, makeAppointmentSlotId, makeAppointmentSlotIds, rescheduleFirebaseAppointment } from './firebase-data.js';
 
-const { business, assets, services, barbers, sampleTestimonials, schedule, storageKeys } = BLACKLINE_CONFIG;
+const { business, assets, sampleTestimonials, schedule, storageKeys } = BLACKLINE_CONFIG;
+const services = Array.isArray(BLACKLINE_CONFIG?.services) ? BLACKLINE_CONFIG.services : [];
+const barbers = Array.isArray(BLACKLINE_CONFIG?.barbers) ? BLACKLINE_CONFIG.barbers : [];
 const statusLabels = {
   pendente: 'Pendente',
   confirmado: 'Confirmado',
@@ -520,7 +522,22 @@ function barberOptions(selected = '') {
 }
 
 function renderBookingServiceCards() {
-  byId('booking-service-options').innerHTML = services.map(service => '<button class="booking-option service-option" type="button" data-booking-service="' + escapeHtml(service.id) + '">'
+  const container = byId('booking-service-options');
+  if (!container) {
+    const fallback = document.createElement('div');
+    fallback.id = 'booking-service-options';
+    fallback.className = 'booking-service-options';
+    const form = byId('booking-form');
+    const target = form?.querySelector('.booking-slide[data-booking-step="0"]');
+    if (target) target.appendChild(fallback);
+    else if (form) form.appendChild(fallback);
+    else return;
+  }
+
+  const targetContainer = byId('booking-service-options');
+  if (!targetContainer) return;
+
+  targetContainer.innerHTML = services.map(service => '<button class="booking-option service-option" type="button" data-booking-service="' + escapeHtml(service.id) + '">'
     + '<strong>' + escapeHtml(service.name) + '</strong>'
     + '<span>' + escapeHtml(service.duration) + ' &bull; ' + money(service.price) + '</span>'
     + '</button>').join('');
@@ -535,9 +552,14 @@ function renderBookingBarberCards() {
 }
 
 function renderSelects() {
-  byId('booking-service').innerHTML = serviceOptions();
-  byId('booking-barber').innerHTML = barberOptions();
-  byId('reschedule-barber').innerHTML = barberOptions();
+  const bookingService = byId('booking-service');
+  const bookingBarber = byId('booking-barber');
+  const rescheduleBarber = byId('reschedule-barber');
+
+  if (bookingService) bookingService.innerHTML = serviceOptions();
+  if (bookingBarber) bookingBarber.innerHTML = barberOptions();
+  if (rescheduleBarber) rescheduleBarber.innerHTML = barberOptions();
+
   renderBookingServiceCards();
   renderBookingBarberCards();
 }
