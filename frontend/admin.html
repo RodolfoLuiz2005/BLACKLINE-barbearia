@@ -15,13 +15,18 @@
         <a class="brand" href="index.html">BLACK<span>LINE</span></a>
         <p class="eyebrow">Acesso restrito</p>
         <h1>Painel administrativo</h1>
-        <p>Informe o PIN da equipe para acessar a agenda.</p>
+        <p>Entre com uma conta autorizada no Firebase Authentication.</p>
         <label>
-          PIN administrativo
-          <input id="admin-pin" type="password" inputmode="numeric" autocomplete="current-password" />
+          E-mail
+          <input id="admin-email" type="email" autocomplete="email" required />
+        </label>
+        <label>
+          Senha
+          <input id="admin-password" type="password" autocomplete="current-password" required />
         </label>
         <div class="form-feedback" id="admin-login-feedback" role="alert"></div>
-        <button class="btn" type="submit">Entrar</button>
+        <button class="btn" type="submit">Entrar com e-mail</button>
+        <button class="btn subtle" type="button" id="admin-google-login">Entrar com Google</button>
       </form>
     </section>
 

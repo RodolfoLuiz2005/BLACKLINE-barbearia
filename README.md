@@ -4,25 +4,51 @@ Site publico e painel administrativo para a BLACKLINE Barber. O frontend usa Fir
 
 ## Rodar localmente
 
-Abra a pasta `frontend` por um servidor estatico, por exemplo com Live Server:
+Instale as dependencias e rode o servidor do Vite:
 
-```text
-http://127.0.0.1:5501/frontend/index.html
-http://127.0.0.1:5501/frontend/admin.html
+```bash
+npm install
+npm run dev
 ```
 
 O backend Express em `backend/` e legado para armazenamento JSON e nao e usado pelo fluxo Firebase atual.
 
 ## Firebase
 
-O projeto configurado em `frontend/firebase-config.js` e `blackline-93c09`.
+O Firebase e configurado em `frontend/firebase-config.js` via variaveis de ambiente do Vite. Crie um arquivo `.env.local` a partir de `.env.example` e preencha os valores reais somente no ambiente local/deploy:
+
+```text
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
+```
+
+Variaveis `VITE_` ficam publicas no bundle final. A `apiKey` do Firebase no front-end nao e um segredo absoluto; a seguranca real depende de restricoes da chave no Google Cloud e das regras do Firebase. Nao coloque service account, private key, token secreto ou qualquer credencial sensivel em variaveis `VITE_`.
+
+## Como configurar variaveis na Vercel
+
+No painel da Vercel, abra o projeto e acesse `Settings` > `Environment Variables`. Cadastre as variaveis abaixo para os ambientes usados pelo deploy, sem commitar valores reais no repositorio:
+
+```text
+VITE_FIREBASE_API_KEY
+VITE_FIREBASE_AUTH_DOMAIN
+VITE_FIREBASE_PROJECT_ID
+VITE_FIREBASE_STORAGE_BUCKET
+VITE_FIREBASE_MESSAGING_SENDER_ID
+VITE_FIREBASE_APP_ID
+```
+
+Depois de alterar variaveis, faca um novo deploy para o Vite embutir os valores publicos no bundle final.
 
 Ative no console do Firebase:
 
 - Firestore Database.
 - Firebase Authentication com provedor Email/Senha.
 - Um usuario admin para acessar `admin.html`.
-- UID admin configurado em `frontend/admin.js` e `firestore.rules`: `VaHoF4WF6tWsCImK03tz9HljO6x2`.
+- UID admin autorizado configurado em `firestore.rules`. Confirme que ele corresponde ao usuario admin real do Firebase Auth.
 
 ## Colecoes usadas
 

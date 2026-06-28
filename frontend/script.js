@@ -1,4 +1,5 @@
 import { BLACKLINE_CONFIG } from './blackline-config.js';
+import { createFirebaseAppointment, loadFirebaseAppointments } from './firebase-data.js';
 
 const { business, assets, services, barbers, sampleTestimonials, schedule, storageKeys } = BLACKLINE_CONFIG;
 const statusLabels = {
@@ -101,7 +102,18 @@ function maskPhone(value) {
   return `(**) *****-${digits.slice(-4)}`;
 }
 
+let appointmentsCache = [];
+
 function loadAppointments() {
+  return appointmentsCache;
+}
+
+function saveAppointments(rows) {
+  appointmentsCache = Array.isArray(rows) ? rows : [];
+  localStorage.setItem(storageKeys.appointments, JSON.stringify(appointmentsCache));
+}
+
+function loadLocalAppointmentsFallback() {
   try {
     return JSON.parse(localStorage.getItem(storageKeys.appointments) || '[]');
   } catch {
@@ -109,8 +121,13 @@ function loadAppointments() {
   }
 }
 
-function saveAppointments(rows) {
-  localStorage.setItem(storageKeys.appointments, JSON.stringify(rows));
+async function refreshAppointmentsFromFirebase() {
+  try {
+    saveAppointments(await loadFirebaseAppointments());
+  } catch (err) {
+    saveAppointments(loadLocalAppointmentsFallback());
+    console.warn('Nao foi possivel carregar agendamentos do Firestore; usando cache local.', err);
+  }
 }
 
 function randomCodeSuffix(length = 6) {
@@ -858,7 +875,7 @@ function renderAppointmentDetails(container, appointment, options = {}) {
   });
 }
 
-function submitBooking(event) {
+async function submitBooking(event) {
   event.preventDefault();
   const service = services.find(item => item.id === byId('booking-service').value);
   const barber = barbers.find(item => item.id === byId('booking-barber').value);
@@ -897,11 +914,19 @@ function submitBooking(event) {
     return;
   }
 
+  try {
+    await createFirebaseAppointment(payload);
+  } catch (err) {
+    console.error('Falha ao registrar agendamento no Firebase.', err);
+    feedback.textContent = 'Nao foi possivel registrar o agendamento agora. Tente novamente em alguns instantes.';
+    feedback.className = 'form-feedback error';
+    return;
+  }
+
   const rows = loadAppointments();
   rows.push(payload);
   saveAppointments(rows);
-  feedback.textContent = 'Agendamento registrado. Guarde seu código para consultar depois.';
-  feedback.className = 'form-feedback ok';
+  feedback.textContent = 'Agendamento registrado. Guarde seu codigo para consultar depois.';  feedback.className = 'form-feedback ok';
   event.target.reset();
   clearSelectedDateTime();
   closeMiniCalendar();
@@ -1099,7 +1124,8 @@ function initReveal() {
   document.querySelectorAll('.reveal').forEach(item => observer.observe(item));
 }
 
-function init() {
+async function init() {
+  await refreshAppointmentsFromFirebase();
   setHeroMedia();
   renderServices();
   renderBarbers();

@@ -2,13 +2,88 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isAdmin() {
-      return request.auth != null
-        && request.auth.uid == "HLaZh9fIaPWjIkHgV9koGGyrEJx2";
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: agendamentos
+    // Document ID: codigo, for example BLK-ABC123
+    // Fields:
+    //   - id: string (required, 1..80) - client generated id or code
+    //   - codigo: string (required, BLK code, immutable for admin updates)
+    //   - nome: string (required, 2..80) - client name, PII
+    //   - telefone: string (required, 10..13 digits) - client phone, PII
+    //   - servico: string (required, 1..80)
+    //   - servicoId: string (required, 1..80)
+    //   - profissionalId: string (required, 1..80)
+    //   - profissionalNome: string (required, 1..80)
+    //   - data: string (required, YYYY-MM-DD)
+    //   - horario: string (required, HH:MM)
+    //   - observacoes: string (optional, 0..300)
+    //   - status: string (required enum)
+    //   - criadoEm: string (required ISO-ish client timestamp, immutable)
+    //   - atualizadoEm: string (required ISO-ish client timestamp)
+    //
+    // Public clients may create pending appointments only. Appointment reads,
+    // updates and deletes are admin-only because documents contain PII.
+    // Catalog collections are public-read and admin-write; do not store PII in them.
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
     }
 
-    function hasOnlyPublicAppointmentFields() {
-      return request.resource.data.keys().hasOnly([
+    function isVerifiedOwnerEmail() {
+      return isAuthenticated()
+        && request.auth.token.email == 'rodolfoluiz09082020@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isAuthenticated()
+        && (
+          request.auth.uid == 'HLaZh9fIaPWjIkHgV9koGGyrEJx2'
+          || request.auth.token.admin == true
+          || isVerifiedOwnerEmail()
+        );
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function validString(field, minLen, maxLen) {
+      return request.resource.data[field] is string
+        && request.resource.data[field].size() >= minLen
+        && request.resource.data[field].size() <= maxLen;
+    }
+
+    function validOptionalString(field, maxLen) {
+      return !(field in request.resource.data)
+        || (request.resource.data[field] is string && request.resource.data[field].size() <= maxLen);
+    }
+
+    function isValidDate(value) {
+      return value is string && value.matches('^\\d{4}-\\d{2}-\\d{2}$');
+    }
+
+    function isValidTime(value) {
+      return value is string && value.matches('^\\d{2}:\\d{2}$');
+    }
+
+    function isValidPhone(value) {
+      return value is string && value.matches('^\\d{10,13}$');
+    }
+
+    function isValidStatus(value) {
+      return value in ['pendente', 'confirmado', 'em_atendimento', 'concluido', 'cancelado'];
+    }
+
+    function appointmentFields() {
+      return [
         'id',
         'codigo',
         'nome',
@@ -23,51 +98,84 @@ service cloud.firestore {
         'status',
         'criadoEm',
         'atualizadoEm'
-      ]);
+      ];
     }
 
-    function isValidPublicAppointmentCreate() {
-      return hasOnlyPublicAppointmentFields()
-        && request.resource.data.nome is string
-        && request.resource.data.telefone is string
-        && request.resource.data.codigo is string
-        && request.resource.data.servicoId is string
-        && request.resource.data.profissionalId is string
-        && request.resource.data.data is string
-        && request.resource.data.horario is string
-        && request.resource.data.status == 'pendente';
+    function isValidAppointment() {
+      return hasOnlyAllowedFields(appointmentFields())
+        && hasRequiredFields(['id', 'codigo', 'nome', 'telefone', 'servico', 'servicoId', 'profissionalId', 'profissionalNome', 'data', 'horario', 'status', 'criadoEm', 'atualizadoEm'])
+        && validString('id', 1, 80)
+        && validString('codigo', 5, 20)
+        && request.resource.data.codigo.matches('^BLK-[A-Z2-9]{6}$')
+        && validString('nome', 2, 80)
+        && isValidPhone(request.resource.data.telefone)
+        && validString('servico', 1, 80)
+        && validString('servicoId', 1, 80)
+        && validString('profissionalId', 1, 80)
+        && validString('profissionalNome', 1, 80)
+        && isValidDate(request.resource.data.data)
+        && isValidTime(request.resource.data.horario)
+        && validOptionalString('observacoes', 300)
+        && isValidStatus(request.resource.data.status)
+        && validString('criadoEm', 10, 40)
+        && validString('atualizadoEm', 10, 40);
+    }
+
+    function publicCreateIsPending() {
+      return request.resource.data.status == 'pendente';
+    }
+
+    function adminImmutableAppointmentFieldsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['id', 'codigo', 'nome', 'telefone', 'servico', 'servicoId', 'criadoEm']);
+    }
+
+    function catalogFields() {
+      return ['ativo', 'criadoEm', 'descricao', 'duracao', 'especialidade', 'foto', 'horariosAtendimento', 'imagemUrl', 'nome', 'ordem', 'preco', 'titulo', 'atualizadoEm', 'beneficios', 'categoria', 'endereco', 'google', 'horario', 'mapa', 'redesSociais', 'telefone', 'whatsapp'];
+    }
+
+    function isValidCatalogDocument() {
+      return request.resource.data.keys().hasOnly(catalogFields());
     }
 
     match /servicos/{id} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create, update: if isAdmin() && isValidCatalogDocument();
+      allow delete: if isAdmin();
     }
 
     match /profissionais/{id} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create, update: if isAdmin() && isValidCatalogDocument();
+      allow delete: if isAdmin();
     }
 
     match /configuracoes/{id} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create, update: if isAdmin() && isValidCatalogDocument();
+      allow delete: if isAdmin();
     }
 
     match /galeria/{id} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create, update: if isAdmin() && isValidCatalogDocument();
+      allow delete: if isAdmin();
     }
 
     match /planos/{id} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create, update: if isAdmin() && isValidCatalogDocument();
+      allow delete: if isAdmin();
     }
 
     match /agendamentos/{id} {
       allow read: if isAdmin();
-      allow create: if isAdmin() || isValidPublicAppointmentCreate();
-      allow update: if isAdmin();
+      allow create: if isValidAppointment() && publicCreateIsPending();
+      allow update: if isAdmin() && isValidAppointment() && adminImmutableAppointmentFieldsUnchanged();
       allow delete: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

@@ -1,5 +1,17 @@
 {
   "firestore": {
     "rules": "firestore.rules"
+  },
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Blackline Barbearia",
+        "supportEmail": "rodolfoluiz09082020@gmail.com",
+        "authorizedRedirectUris": [
+          "https://blackline-barbearia.vercel.app"
+        ]
+      }
+    }
   }
 }

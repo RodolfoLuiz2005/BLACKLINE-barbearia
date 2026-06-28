@@ -1,69 +1,21 @@
 import { BLACKLINE_CONFIG } from './blackline-config.js';
+import { GoogleAuthProvider, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signOut } from 'firebase/auth';
+import { getBlacklineAuth } from './firebase-config.js';
+import { loadFirebaseAppointments, updateFirebaseAppointment } from './firebase-data.js';
 
-const { business, services, barbers, storageKeys } = BLACKLINE_CONFIG;
+const { business, services, barbers } = BLACKLINE_CONFIG;
 const STATUS = {
   pendente: { label: 'Pendente', className: 'pending' },
   confirmado: { label: 'Confirmado', className: 'confirmed' },
   em_atendimento: { label: 'Em atendimento', className: 'serving' },
-  concluido: { label: 'Concluído', className: 'done' },
+  concluido: { label: 'Concluido', className: 'done' },
   cancelado: { label: 'Cancelado', className: 'canceled' }
 };
-const ADMIN_SESSION_KEY = 'blackline:admin:session';
-const ADMIN_PIN_HASH = '158a323a7ba44870f23d96f1516dd70aa48e9a72db4ebb026b0a89e212a208ab';
-const FUTURE_ADMIN_ROLES = ['admin', 'barbeiro', 'recepção'];
-let adminEventsBound = false;
 
-// Autenticação provisória para ambiente sem backend. Em produção, substitua por autenticação real no servidor (Supabase, Firebase Auth ou API própria) e regras de autorização no backend.
-async function hashText(value) {
-  const data = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join('');
-}
-function isAdminAuthenticated() { return sessionStorage.getItem(ADMIN_SESSION_KEY) === 'ok'; }
-function showAdminLogin(message = '') {
-  byId('admin-login').hidden = false;
-  byId('admin-shell').hidden = true;
-  byId('admin-main').hidden = true;
-  byId('admin-login-feedback').textContent = message;
-  byId('admin-login-feedback').className = message ? 'form-feedback error' : 'form-feedback';
-}
-function showAdminPanel() {
-  byId('admin-login').hidden = true;
-  byId('admin-shell').hidden = false;
-  byId('admin-main').hidden = false;
-}
-async function handleAdminLogin(event) {
-  event.preventDefault();
-  const pin = byId('admin-pin').value.trim();
-  if (!pin) {
-    showAdminLogin('Informe o PIN administrativo.');
-    return;
-  }
-  if (await hashText(pin) !== ADMIN_PIN_HASH) {
-    showAdminLogin('PIN inválido.');
-    return;
-  }
-  sessionStorage.setItem(ADMIN_SESSION_KEY, 'ok');
-  showAdminPanel();
-  attachEvents();
-  renderTable();
-  toast('Acesso liberado.');
-}
-function logoutAdmin() {
-  sessionStorage.removeItem(ADMIN_SESSION_KEY);
-  byId('admin-pin').value = '';
-  showAdminLogin();
-}
+let adminEventsBound = false;
+let appointmentsCache = [];
 
 function byId(id) { return document.getElementById(id); }
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
 function onlyDigits(value) { return String(value || '').replace(/\D/g, ''); }
 function money(value) { return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 function formatPhone(value) {
@@ -73,13 +25,12 @@ function formatPhone(value) {
 }
 function maskPhone(value) {
   const digits = onlyDigits(value);
-  if (digits.length < 4) return '••••';
+  if (digits.length < 4) return '****';
   return '(**) *****-' + digits.slice(-4);
 }
 function historyEntry(type, details = {}) {
   return { type, at: new Date().toISOString(), ...details };
 }
-
 function formatDate(value) {
   if (!value) return '-';
   const date = new Date(`${value}T12:00:00`);
@@ -88,14 +39,16 @@ function formatDate(value) {
 }
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 function whatsappLink(phone, message) { return `https://wa.me/${onlyDigits(phone)}?text=${encodeURIComponent(message)}`; }
-
-function loadAppointments() {
-  try { return JSON.parse(localStorage.getItem(storageKeys.appointments) || '[]'); }
-  catch { return []; }
-}
-function saveAppointments(rows) { localStorage.setItem(storageKeys.appointments, JSON.stringify(rows)); }
 function getService(id) { return services.find(item => item.id === id); }
 function getBarber(id) { return barbers.find(item => item.id === id); }
+
+function loadAppointments() {
+  return appointmentsCache;
+}
+
+function saveAppointments(rows) {
+  appointmentsCache = Array.isArray(rows) ? rows : [];
+}
 
 function normalizeAppointment(item) {
   const service = getService(item.serviceId);
@@ -120,7 +73,70 @@ function toast(message, type = 'ok') {
 }
 
 function buildClientMessage(appointment) {
-  return `Olá, ${appointment.name}! Aqui é a ${business.name}.\n\nAgendamento: ${appointment.code}\nServiço: ${appointment.serviceName}\nBarbeiro: ${appointment.barberName}\nData: ${formatDate(appointment.date)}\nHorário: ${appointment.time}\nStatus: ${STATUS[appointment.status].label}`;
+  return `Ola, ${appointment.name}! Aqui e a ${business.name}.\n\nAgendamento: ${appointment.code}\nServico: ${appointment.serviceName}\nBarbeiro: ${appointment.barberName}\nData: ${formatDate(appointment.date)}\nHorario: ${appointment.time}\nStatus: ${STATUS[appointment.status].label}`;
+}
+
+function showAdminLogin(message = '') {
+  byId('admin-login').hidden = false;
+  byId('admin-shell').hidden = true;
+  byId('admin-main').hidden = true;
+  byId('admin-login-feedback').textContent = message;
+  byId('admin-login-feedback').className = message ? 'form-feedback error' : 'form-feedback';
+}
+
+function showAdminPanel() {
+  byId('admin-login').hidden = true;
+  byId('admin-shell').hidden = false;
+  byId('admin-main').hidden = false;
+}
+
+function friendlyAuthError(error) {
+  const code = error?.code || '';
+  if (code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found')) return 'E-mail ou senha invalidos.';
+  if (code.includes('popup-closed-by-user')) return 'Login com Google cancelado.';
+  if (code.includes('unauthorized-domain')) return 'Dominio nao autorizado no Firebase Authentication.';
+  if (code.includes('operation-not-allowed')) return 'Provedor de login nao habilitado no Firebase Authentication.';
+  return 'Nao foi possivel autenticar. Verifique a conta e tente novamente.';
+}
+
+async function refreshAppointments() {
+  try {
+    saveAppointments(await loadFirebaseAppointments());
+    renderTable();
+  } catch (err) {
+    console.error('Erro ao carregar agendamentos do Firestore.', err);
+    toast('Nao foi possivel carregar a agenda.', 'error');
+  }
+}
+
+async function handleAdminLogin(event) {
+  event.preventDefault();
+  const email = byId('admin-email').value.trim();
+  const password = byId('admin-password').value;
+  if (!email || !password) {
+    showAdminLogin('Informe e-mail e senha.');
+    return;
+  }
+  try {
+    const auth = getBlacklineAuth();
+    await signInWithEmailAndPassword(auth, email, password);
+  } catch (err) {
+    showAdminLogin(friendlyAuthError(err));
+  }
+}
+
+async function handleGoogleLogin() {
+  try {
+    const auth = getBlacklineAuth();
+    await signInWithPopup(auth, new GoogleAuthProvider());
+  } catch (err) {
+    showAdminLogin(friendlyAuthError(err));
+  }
+}
+
+async function logoutAdmin() {
+  const auth = getBlacklineAuth();
+  await signOut(auth);
 }
 
 function filteredAppointments() {
@@ -187,14 +203,14 @@ function renderTable() {
     const status = STATUS[item.status];
     const row = document.createElement('tr');
     const cells = [
-      ['Código', item.code, true],
+      ['Codigo', item.code, true],
       ['Cliente', item.name],
       ['WhatsApp', maskPhone(item.phone)],
-      ['Serviço', item.serviceName],
+      ['Servico', item.serviceName],
       ['Barbeiro', item.barberName],
       ['Data', formatDate(item.date)],
-      ['Horário', item.time],
-      ['Duração', item.durationMinutes ? item.durationMinutes + ' min' : '-'],
+      ['Horario', item.time],
+      ['Duracao', item.durationMinutes ? item.durationMinutes + ' min' : '-'],
       ['Valor', money(item.price)]
     ];
     cells.forEach(([label, value, strong]) => {
@@ -217,7 +233,7 @@ function renderTable() {
     statusCell.appendChild(statusBadge);
     row.appendChild(statusCell);
     const actionsCell = document.createElement('td');
-    actionsCell.dataset.label = 'Ações';
+    actionsCell.dataset.label = 'Acoes';
     const actions = document.createElement('div');
     actions.className = 'actions';
     appendActions(actions, item);
@@ -230,17 +246,25 @@ function renderTable() {
   renderMetrics();
 }
 
-function updateStatus(id, status) {
+async function updateStatus(id, status) {
   const rows = loadAppointments();
-  const index = rows.findIndex(item => item.id === id);
+  const index = rows.findIndex(item => item.id === id || item.code === id);
   if (index === -1) return;
   const previousHistory = Array.isArray(rows[index].history) ? rows[index].history : [];
-  rows[index].status = status;
-  rows[index].history = [...previousHistory, historyEntry('admin_status_changed', { status })];
-  rows[index].updatedAt = new Date().toISOString();
-  saveAppointments(rows);
-  renderTable();
-  toast('Status atualizado para ' + STATUS[status].label + '.');
+  const patch = {
+    status,
+    history: [...previousHistory, historyEntry('admin_status_changed', { status })]
+  };
+  try {
+    await updateFirebaseAppointment(rows[index].code || id, { status });
+    rows[index] = { ...rows[index], ...patch, updatedAt: new Date().toISOString() };
+    saveAppointments(rows);
+    renderTable();
+    toast('Status atualizado para ' + STATUS[status].label + '.');
+  } catch (err) {
+    console.error('Erro ao atualizar agendamento no Firestore.', err);
+    toast('Nao foi possivel atualizar o status.', 'error');
+  }
 }
 
 function cancelAppointment(id) {
@@ -258,7 +282,7 @@ function attachEvents() {
     byId('filter-search').value = '';
     renderTable();
   });
-  byId('refresh-list').addEventListener('click', () => { renderTable(); toast('Painel atualizado.'); });
+  byId('refresh-list').addEventListener('click', () => { refreshAppointments(); toast('Painel atualizado.'); });
   byId('appointments-body').addEventListener('click', event => {
     const target = event.target.closest('[data-action]');
     if (!target) return;
@@ -268,12 +292,25 @@ function attachEvents() {
   });
 }
 
-byId('admin-login-form').addEventListener('submit', handleAdminLogin);
-byId('admin-logout').addEventListener('click', logoutAdmin);
-if (isAdminAuthenticated()) {
-  showAdminPanel();
-  attachEvents();
-  renderTable();
-} else {
-  showAdminLogin();
+async function initAuthState() {
+  const auth = getBlacklineAuth();
+  onAuthStateChanged(auth, user => {
+    if (!user) {
+      showAdminLogin();
+      return;
+    }
+    showAdminPanel();
+    attachEvents();
+    refreshAppointments();
+    toast('Acesso liberado.');
+  });
 }
+
+byId('admin-login-form').addEventListener('submit', handleAdminLogin);
+byId('admin-google-login').addEventListener('click', handleGoogleLogin);
+byId('admin-logout').addEventListener('click', logoutAdmin);
+showAdminLogin();
+initAuthState().catch(err => {
+  console.error('Erro ao iniciar Firebase Auth.', err);
+  showAdminLogin('Firebase Authentication nao configurado.');
+});

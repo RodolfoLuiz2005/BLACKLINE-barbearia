@@ -1,16 +1,40 @@
-const firebaseEnv = import.meta.env || {};
+import { initializeApp, getApps } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { getFirestore, initializeFirestore } from 'firebase/firestore';
 
-// As variáveis VITE_ são públicas no bundle final. A apiKey do Firebase no front-end
-// não é um segredo absoluto; a segurança real depende de restrições da chave no
+// Variaveis VITE_ ficam publicas no bundle final. A Firebase apiKey no front-end
+// nao e um segredo absoluto; a seguranca real depende de restricoes da chave no
 // Google Cloud Console e de regras corretas no Firebase Authentication/Firestore.
-export const firebaseConfig = {
-  apiKey: firebaseEnv.VITE_FIREBASE_API_KEY || '',
-  authDomain: firebaseEnv.VITE_FIREBASE_AUTH_DOMAIN || '',
-  projectId: firebaseEnv.VITE_FIREBASE_PROJECT_ID || '',
-  storageBucket: firebaseEnv.VITE_FIREBASE_STORAGE_BUCKET || '',
-  messagingSenderId: firebaseEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-  appId: firebaseEnv.VITE_FIREBASE_APP_ID || ''
+const requiredFirebaseEnv = {
+  VITE_FIREBASE_API_KEY: import.meta.env.VITE_FIREBASE_API_KEY,
+  VITE_FIREBASE_AUTH_DOMAIN: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  VITE_FIREBASE_PROJECT_ID: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  VITE_FIREBASE_STORAGE_BUCKET: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  VITE_FIREBASE_MESSAGING_SENDER_ID: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  VITE_FIREBASE_APP_ID: import.meta.env.VITE_FIREBASE_APP_ID
 };
+
+export const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || undefined
+};
+
+const missingFirebaseEnvVars = Object.entries(requiredFirebaseEnv)
+  .filter(([, value]) => !value)
+  .map(([key]) => key);
+
+if (import.meta.env.DEV && missingFirebaseEnvVars.length) {
+  console.error(
+    'Firebase nao configurado. Defina as variaveis de ambiente ausentes: ' +
+    missingFirebaseEnvVars.join(', ') +
+    '. Nenhum valor sensivel foi exibido no console.'
+  );
+}
 
 let firebaseApp;
 let firestoreDb;
@@ -28,45 +52,41 @@ function hasFirebaseConfig(config) {
 }
 
 function firebaseConfigError() {
-  return new Error('Firebase não configurado. Defina VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_STORAGE_BUCKET, VITE_FIREBASE_MESSAGING_SENDER_ID e VITE_FIREBASE_APP_ID no ambiente de build.');
+  return new Error('Firebase nao configurado. Defina as variaveis VITE_FIREBASE_* no ambiente de build.');
 }
 
-export async function getBlacklineDb() {
-  if (!hasFirebaseConfig(firebaseConfig)) {
-    throw firebaseConfigError();
-  }
-
-  if (firestoreDb) return firestoreDb;
-
-  firebaseApp = await getBlacklineApp();
-  const { getFirestore, initializeFirestore } = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js');
-  try {
-    firestoreDb = initializeFirestore(firebaseApp, {
-      experimentalAutoDetectLongPolling: true
-    });
-  } catch (err) {
-    firestoreDb = getFirestore(firebaseApp);
-  }
-  return firestoreDb;
-}
-
-export async function getBlacklineApp() {
+export function getBlacklineApp() {
   if (!hasFirebaseConfig(firebaseConfig)) {
     throw firebaseConfigError();
   }
 
   if (firebaseApp) return firebaseApp;
 
-  const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js');
   firebaseApp = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
   return firebaseApp;
 }
 
-export async function getBlacklineAuth() {
+export function getBlacklineDb() {
+  if (!hasFirebaseConfig(firebaseConfig)) {
+    throw firebaseConfigError();
+  }
+
+  if (firestoreDb) return firestoreDb;
+
+  const app = getBlacklineApp();
+  try {
+    firestoreDb = initializeFirestore(app, {
+      experimentalAutoDetectLongPolling: true
+    });
+  } catch (err) {
+    firestoreDb = getFirestore(app);
+  }
+  return firestoreDb;
+}
+
+export function getBlacklineAuth() {
   if (firebaseAuth) return firebaseAuth;
 
-  const app = await getBlacklineApp();
-  const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js');
-  firebaseAuth = getAuth(app);
+  firebaseAuth = getAuth(getBlacklineApp());
   return firebaseAuth;
 }
