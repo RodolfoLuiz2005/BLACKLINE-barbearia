@@ -343,12 +343,16 @@ function setHeroMedia() {
   const video = byId('hero-video');
   const source = byId('hero-video-source');
   const fallback = byId('hero-fallback');
-  source.src = assets.heroVideo;
-  video.poster = assets.heroFallback;
-  fallback.style.backgroundImage = `url('${assets.heroFallback}')`;
-  video.load();
-  video.addEventListener('error', () => document.body.classList.add('hero-video-failed'));
-  source.addEventListener('error', () => document.body.classList.add('hero-video-failed'));
+  const fallbackImage = assets.heroFallback || '/og-image.jpg';
+
+  if (source && assets.heroVideo) source.src = assets.heroVideo;
+  if (video) video.poster = fallbackImage;
+  if (fallback) fallback.style.backgroundImage = `url('${fallbackImage}')`;
+  if (video && assets.heroVideo) video.load();
+
+  const showFallback = () => document.body.classList.add('hero-video-failed');
+  video?.addEventListener('error', showFallback);
+  source?.addEventListener('error', showFallback);
 }
 
 function renderServices() {
@@ -461,6 +465,30 @@ function setCalendarCursorFromDate(dateValue = '') {
   calendarCursor = new Date(base.getFullYear(), base.getMonth(), 1, 12, 0, 0, 0);
 }
 
+function calendarDayState(date, iso, barberId) {
+  const today = startOfLocalDay();
+  const day = date.getDay();
+  const availability = getBarberAvailability(barberId);
+
+  if (startOfLocalDay(date) < today) {
+    return { available: false, className: 'is-disabled is-past', label: 'Passou' };
+  }
+
+  if (!schedule.openDays.includes(day)) {
+    return { available: false, className: 'is-disabled is-closed', label: 'Fechado' };
+  }
+
+  if (!availability.availableWeekDays.includes(day) || availability.unavailableDates.includes(iso)) {
+    return { available: false, className: 'is-disabled is-offday', label: 'Folga' };
+  }
+
+  if (!hasAvailableTimes(iso, barberId)) {
+    return { available: false, className: 'is-disabled is-full', label: 'Sem horario' };
+  }
+
+  return { available: true, className: 'is-available', label: 'Disponivel' };
+}
+
 function renderMiniCalendar() {
   const calendar = byId('mini-calendar');
   const daysWrapper = byId('calendar-days');
@@ -472,6 +500,8 @@ function renderMiniCalendar() {
   byId('calendar-toggle').disabled = !unlocked;
   byId('calendar-month-label').textContent = calendarMonthLabel(calendarCursor);
   byId('calendar-prev').disabled = calendarCursor <= new Date(new Date().getFullYear(), new Date().getMonth(), 1, 12, 0, 0, 0);
+  daysWrapper.setAttribute('role', 'grid');
+  daysWrapper.setAttribute('aria-label', 'Dias disponíveis para agendamento em ' + calendarMonthLabel(calendarCursor));
 
   if (!unlocked) {
     daysWrapper.innerHTML = '<p class="picker-empty calendar-empty">Escolha serviço e barbeiro.</p>';
@@ -492,19 +522,21 @@ function renderMiniCalendar() {
   for (let dayNumber = 1; dayNumber <= lastDay.getDate(); dayNumber += 1) {
     const date = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth(), dayNumber, 12, 0, 0, 0);
     const iso = localIsoDate(date);
+    const state = calendarDayState(date, iso, barberId);
     const selected = iso === selectedDate;
     const today = iso === todayIso;
-    const available = isDateAvailable(iso, barberId);
-    const label = available ? 'Disponível' : 'Indisponível';
-    cells.push('<button class="calendar-day ' + (selected ? 'is-selected ' : '') + (today ? 'is-today ' : '') + (!available ? 'is-disabled' : '') + '" type="button" data-calendar-date="' + escapeHtml(iso) + '" ' + (!available ? 'disabled' : '') + ' aria-label="' + escapeHtml(longDateLabel(iso) + ' - ' + label) + '">'
+    const classes = ['calendar-day', state.className, selected ? 'is-selected' : '', today ? 'is-today' : ''].filter(Boolean).join(' ');
+    const label = longDateLabel(iso) + ' - ' + state.label + (today ? ' - hoje' : '') + (selected ? ' - selecionado' : '');
+
+    cells.push('<button class="' + classes + '" type="button" role="gridcell" data-calendar-date="' + escapeHtml(iso) + '" ' + (!state.available ? 'disabled aria-disabled="true"' : 'aria-disabled="false"') + ' aria-pressed="' + (selected ? 'true' : 'false') + '" aria-label="' + escapeHtml(label) + '">'
       + '<strong>' + dayNumber + '</strong>'
-      + '<span>' + label + '</span>'
+      + (today ? '<em class="calendar-day-today">Hoje</em>' : '')
+      + '<span class="calendar-day-status">' + state.label + '</span>'
       + '</button>');
   }
 
   daysWrapper.innerHTML = cells.join('');
 }
-
 function openMiniCalendar() {
   if (!byId('booking-service').value || !byId('booking-barber').value) {
     showScheduleToast('Escolha um barbeiro antes de selecionar a data.', 'error');
@@ -611,13 +643,18 @@ function goToStep(step) {
     const active = Number(slide.dataset.bookingStep) === currentStep;
     slide.classList.toggle('is-active', active);
     slide.setAttribute('aria-hidden', active ? 'false' : 'true');
+    if (active) slide.removeAttribute('inert');
+    else slide.setAttribute('inert', '');
+  });
+  document.querySelectorAll('[data-step-indicator]').forEach(indicator => {
+    const active = Number(indicator.dataset.stepIndicator) === currentStep;
+    indicator.setAttribute('aria-current', active ? 'step' : 'false');
   });
   updateSteps();
   updateBookingVisibility();
   updateScheduleSummary();
   window.requestAnimationFrame(updateSliderHeight);
 }
-
 function nextStep() {
   goToStep(currentStep + 1);
 }

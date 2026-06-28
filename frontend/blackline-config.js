@@ -1,3 +1,5 @@
+import heroFallbackUrl from './og-image.jpg';
+
 export const BLACKLINE_CONFIG = {
   business: {
     name: 'Blackline Barbearia',
@@ -14,7 +16,7 @@ export const BLACKLINE_CONFIG = {
   },
   assets: {
     heroVideo: 'https://videos.pexels.com/video-files/3996971/3996971-uhd_2560_1440_25fps.mp4',
-    heroFallback: 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?q=80&w=1600&auto=format&fit=crop',
+    heroFallback: heroFallbackUrl,
     barberFallback: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?q=80&w=900&auto=format&fit=crop'
   },
   services: [

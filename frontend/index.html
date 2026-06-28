@@ -16,12 +16,15 @@
   <meta property="og:url" content="https://blackline-barbearia.vercel.app/" />
   <meta property="og:image" content="https://blackline-barbearia.vercel.app/og-image.jpg" />
   <meta property="og:image:alt" content="Interior premium da Blackline Barbearia" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
   <meta property="og:site_name" content="Blackline Barbearia" />
   <meta property="og:locale" content="pt_BR" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Blackline Barbearia | Corte, barba e estilo premium" />
   <meta name="twitter:description" content="Agende seu horário com barbeiros especialistas em Recife." />
   <meta name="twitter:image" content="https://blackline-barbearia.vercel.app/og-image.jpg" />
+  <meta name="twitter:image:alt" content="Interior premium da Blackline Barbearia" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
@@ -49,10 +52,10 @@
 
   <main>
     <section class="hero" id="inicio">
-      <video class="hero-video" autoplay muted loop playsinline preload="metadata" poster="" id="hero-video">
-        <source id="hero-video-source" src="" type="video/mp4" />
+      <video class="hero-video" autoplay muted loop playsinline preload="metadata" poster="/og-image.jpg" id="hero-video">
+        <source id="hero-video-source" src="https://videos.pexels.com/video-files/3996971/3996971-uhd_2560_1440_25fps.mp4" type="video/mp4" />
       </video>
-      <div class="hero-fallback" id="hero-fallback"></div>
+      <div class="hero-fallback" id="hero-fallback" style="background-image:url('/og-image.jpg')"></div>
       <div class="hero-overlay"></div>
       <div class="hero-content">
         <p class="eyebrow">Blackline Barbearia</p>
@@ -167,7 +170,7 @@
         </div>
 
         <div class="booking-steps" aria-label="Etapas do agendamento">
-          <span class="active" data-step-indicator="0">1 Serviço</span>
+          <span class="active" data-step-indicator="0" aria-current="step">1 Serviço</span>
           <span data-step-indicator="1">2 Barbeiro</span>
           <span data-step-indicator="2">3 Data</span>
           <span data-step-indicator="3">4 Horário</span>
@@ -177,7 +180,7 @@
 
         <div class="booking-slider-viewport">
           <div class="booking-slider-track" id="booking-slider-track" style="--booking-step:0">
-            <section class="booking-slide booking-choice" aria-labelledby="service-choice-title" data-booking-step="0">
+            <section class="booking-slide booking-choice is-active" aria-labelledby="service-choice-title" data-booking-step="0" aria-hidden="false">
               <div class="picker-heading compact">
                 <div>
                   <span id="service-choice-title">Serviço</span>
@@ -188,7 +191,7 @@
               <div class="booking-service-options" id="booking-service-options"></div>
             </section>
 
-            <section class="booking-slide booking-choice" id="barber-picker-panel" aria-labelledby="barber-choice-title" data-booking-step="1">
+            <section class="booking-slide booking-choice" id="barber-picker-panel" aria-labelledby="barber-choice-title" data-booking-step="1" aria-hidden="true">
               <div class="picker-heading compact">
                 <div>
                   <span id="barber-choice-title">Barbeiro</span>
@@ -202,7 +205,7 @@
               </div>
             </section>
 
-            <section class="booking-slide visual-picker mini-date-picker" id="date-picker-panel" aria-labelledby="date-picker-title" data-booking-step="2">
+            <section class="booking-slide visual-picker mini-date-picker" id="date-picker-panel" aria-labelledby="date-picker-title" data-booking-step="2" aria-hidden="true">
               <div class="picker-heading compact">
                 <div>
                   <span id="date-picker-title">Data</span>
@@ -227,7 +230,7 @@
               </div>
             </section>
 
-            <section class="booking-slide visual-picker" id="time-picker-panel" aria-labelledby="time-picker-title" data-booking-step="3">
+            <section class="booking-slide visual-picker" id="time-picker-panel" aria-labelledby="time-picker-title" data-booking-step="3" aria-hidden="true">
               <div class="picker-heading compact">
                 <div>
                   <span id="time-picker-title">Horário</span>
@@ -241,7 +244,7 @@
               </div>
             </section>
 
-            <section class="booking-slide client-details" id="client-details" data-booking-step="4">
+            <section class="booking-slide client-details" id="client-details" data-booking-step="4" aria-hidden="true">
               <div class="picker-heading compact">
                 <div>
                   <span>Seus dados</span>
@@ -269,7 +272,7 @@
               </div>
             </section>
 
-            <section class="booking-slide booking-confirmation" data-booking-step="5" aria-labelledby="confirmation-title">
+            <section class="booking-slide booking-confirmation" data-booking-step="5" aria-labelledby="confirmation-title" aria-hidden="true">
               <div class="picker-heading compact">
                 <div>
                   <span id="confirmation-title">Confirmar</span>
@@ -380,14 +383,25 @@
       <div class="location-panel">
         <div>
           <h3 id="business-name">Blackline Barbearia</h3>
-          <div class="contact-list">
-            <p><strong>Endereço</strong><span id="business-address">Av. Boa Viagem, 1250 - Boa Viagem, Recife -
-                PE</span></p>
-            <p><strong>Horário</strong><span id="business-hours">Segunda a sábado, das 09h às 20h</span></p>
-            <p><strong>WhatsApp</strong><span id="business-phone">(81) 99999-9999</span></p>
-            <p><strong>Instagram</strong><a id="business-instagram" href="https://www.instagram.com/blacklinebarbearia"
-                target="_blank" rel="noopener">@blacklinebarbearia</a></p>
-          </div>
+          <dl class="contact-list">
+            <div>
+              <dt>Endereço</dt>
+              <dd id="business-address">Av. Boa Viagem, 1250 - Boa Viagem, Recife - PE</dd>
+            </div>
+            <div>
+              <dt>Horário</dt>
+              <dd id="business-hours">Segunda a sábado, das 09h às 20h</dd>
+            </div>
+            <div>
+              <dt>WhatsApp</dt>
+              <dd id="business-phone">(81) 99999-9999</dd>
+            </div>
+            <div>
+              <dt>Instagram</dt>
+              <dd><a id="business-instagram" href="https://www.instagram.com/blacklinebarbearia" target="_blank"
+                  rel="noopener">@blacklinebarbearia</a></dd>
+            </div>
+          </dl>
         </div>
         <iframe id="business-map" title="Mapa da Blackline Barbearia" loading="lazy"
           src="https://www.google.com/maps?q=Av.%20Boa%20Viagem%201250%20Recife%20PE&output=embed"></iframe>
@@ -398,7 +412,7 @@
       <div class="section-heading">
         <p class="eyebrow">Privacidade</p>
         <h2>Política de Privacidade</h2>
-        <p>Usamos nome, WhatsApp e dados do agendamento apenas para confirmar, gerenciar, reagendar ou cancelar seu horário. As informações ficam armazenadas localmente neste sistema e não são vendidas ou compartilhadas para publicidade.</p>
+        <p>Usamos nome, WhatsApp e dados do agendamento apenas para confirmar, gerenciar, reagendar ou cancelar seu horário. As informações podem ser armazenadas no sistema online da Blackline, com Firebase/Firestore, e não são vendidas ou compartilhadas para publicidade.</p>
       </div>
     </section>
   </main>
