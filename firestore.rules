@@ -5,27 +5,38 @@ service cloud.firestore {
     // ===============================================================
     // Assumed Data Model
     // ===============================================================
-    // Collection: agendamentos
-    // Document ID: codigo, for example BLK-ABC123
-    // Fields:
-    //   - id: string (required, 1..80) - client generated id or code
-    //   - codigo: string (required, BLK code, immutable for admin updates)
-    //   - nome: string (required, 2..80) - client name, PII
-    //   - telefone: string (required, 10..13 digits) - client phone, PII
-    //   - servico: string (required, 1..80)
-    //   - servicoId: string (required, 1..80)
-    //   - profissionalId: string (required, 1..80)
-    //   - profissionalNome: string (required, 1..80)
-    //   - data: string (required, YYYY-MM-DD)
-    //   - horario: string (required, HH:MM)
-    //   - observacoes: string (optional, 0..300)
-    //   - status: string (required enum)
-    //   - criadoEm: string (required ISO-ish client timestamp, immutable)
-    //   - atualizadoEm: string (required ISO-ish client timestamp)
     //
-    // Public clients may create pending appointments only. Appointment reads,
-    // updates and deletes are admin-only because documents contain PII.
-    // Catalog collections are public-read and admin-write; do not store PII in them.
+    // Collection: agendamentos
+    // Document ID: random appointment id, equal to field id.
+    // Contains client PII and is readable only by admins.
+    // Fields:
+    //   - id: string (required, immutable client/admin identity)
+    //   - codigo: string (required, BLK-[A-Z2-9]{6})
+    //   - consultaId: string (required, sha256 hex of WhatsApp+codigo)
+    //   - nome: string (required, 2..80) - PII
+    //   - telefone: string (required, 11 digits) - PII
+    //   - servico/servicoId/profissionalId/profissionalNome: string
+    //   - data: string YYYY-MM-DD
+    //   - horario: string HH:MM
+    //   - duracaoMinutos: number/int 1..90
+    //   - preco: number 0..10000
+    //   - observacoes: optional string 0..300
+    //   - status: pendente|confirmado|em_atendimento|concluido|cancelado
+    //   - slotIds: list of deterministic ocupacaoHorarios ids for active bookings
+    //   - criadoEm/atualizadoEm: ISO-like strings
+    //
+    // Collection: consultasAgendamento
+    // Document ID: consultaId. Same fields as agendamentos. Public clients may
+    // get one exact document only when they know WhatsApp+codigo and can compute
+    // the hash in the app. Listing is admin-only.
+    //
+    // Collection: ocupacaoHorarios
+    // Document ID: profissionalId_YYYY-MM-DD_HH:MM.
+    // Public clients may get individual slot documents to render availability.
+    // Slot documents contain no client PII and cannot be listed publicly.
+    //
+    // Catalog collections are public-read and admin-write. Do not store PII in
+    // public catalog/config documents.
     // ===============================================================
 
     function isAuthenticated() {
@@ -47,23 +58,23 @@ service cloud.firestore {
         );
     }
 
-    function hasRequiredFields(fields) {
-      return request.resource.data.keys().hasAll(fields);
+    function hasOnlyAllowedFields(data, fields) {
+      return data.keys().hasOnly(fields);
     }
 
-    function hasOnlyAllowedFields(fields) {
-      return request.resource.data.keys().hasOnly(fields);
+    function hasRequiredFields(data, fields) {
+      return data.keys().hasAll(fields);
     }
 
-    function validString(field, minLen, maxLen) {
-      return request.resource.data[field] is string
-        && request.resource.data[field].size() >= minLen
-        && request.resource.data[field].size() <= maxLen;
+    function validString(data, field, minLen, maxLen) {
+      return data[field] is string
+        && data[field].size() >= minLen
+        && data[field].size() <= maxLen;
     }
 
-    function validOptionalString(field, maxLen) {
-      return !(field in request.resource.data)
-        || (request.resource.data[field] is string && request.resource.data[field].size() <= maxLen);
+    function validOptionalString(data, field, maxLen) {
+      return !(field in data)
+        || (data[field] is string && data[field].size() <= maxLen);
     }
 
     function isValidDate(value) {
@@ -75,17 +86,35 @@ service cloud.firestore {
     }
 
     function isValidPhone(value) {
-      return value is string && value.matches('^\\d{10,13}$');
+      return value is string && value.matches('^\\d{11}$');
+    }
+
+    function isValidLookupId(value) {
+      return value is string && value.matches('^[a-f0-9]{64}$');
     }
 
     function isValidStatus(value) {
       return value in ['pendente', 'confirmado', 'em_atendimento', 'concluido', 'cancelado'];
     }
 
+    function isBlockingStatus(value) {
+      return value in ['pendente', 'confirmado', 'em_atendimento'];
+    }
+
+    function isClientMutableStatus(value) {
+      return value in ['pendente', 'confirmado'];
+    }
+
+    function isValidSlotId(value) {
+      return value is string
+        && value.matches('^[A-Za-z0-9_-]{1,80}_\\d{4}-\\d{2}-\\d{2}_\\d{2}:\\d{2}$');
+    }
+
     function appointmentFields() {
       return [
         'id',
         'codigo',
+        'consultaId',
         'nome',
         'telefone',
         'servico',
@@ -94,39 +123,220 @@ service cloud.firestore {
         'profissionalNome',
         'data',
         'horario',
+        'duracaoMinutos',
+        'preco',
         'observacoes',
         'status',
+        'slotIds',
         'criadoEm',
         'atualizadoEm'
       ];
     }
 
-    function isValidAppointment() {
-      return hasOnlyAllowedFields(appointmentFields())
-        && hasRequiredFields(['id', 'codigo', 'nome', 'telefone', 'servico', 'servicoId', 'profissionalId', 'profissionalNome', 'data', 'horario', 'status', 'criadoEm', 'atualizadoEm'])
-        && validString('id', 1, 80)
-        && validString('codigo', 5, 20)
-        && request.resource.data.codigo.matches('^BLK-[A-Z2-9]{6}$')
-        && validString('nome', 2, 80)
-        && isValidPhone(request.resource.data.telefone)
-        && validString('servico', 1, 80)
-        && validString('servicoId', 1, 80)
-        && validString('profissionalId', 1, 80)
-        && validString('profissionalNome', 1, 80)
-        && isValidDate(request.resource.data.data)
-        && isValidTime(request.resource.data.horario)
-        && validOptionalString('observacoes', 300)
-        && isValidStatus(request.resource.data.status)
-        && validString('criadoEm', 10, 40)
-        && validString('atualizadoEm', 10, 40);
+    function activeSlotCountMatchesDuration(data) {
+      return (data.duracaoMinutos <= 30 && data.slotIds.size() == 1)
+        || (data.duracaoMinutos > 30 && data.duracaoMinutos <= 60 && data.slotIds.size() == 2)
+        || (data.duracaoMinutos > 60 && data.duracaoMinutos <= 90 && data.slotIds.size() == 3);
     }
 
-    function publicCreateIsPending() {
-      return request.resource.data.status == 'pendente';
+    function slotIdsAreValid(data) {
+      return data.slotIds is list
+        && (
+          (!isBlockingStatus(data.status) && data.slotIds.size() == 0)
+          || (
+            isBlockingStatus(data.status)
+            && data.slotIds.size() >= 1
+            && data.slotIds.size() <= 3
+            && activeSlotCountMatchesDuration(data)
+            && isValidSlotId(data.slotIds[0])
+            && data.slotIds[0] == data.profissionalId + '_' + data.data + '_' + data.horario
+            && (data.slotIds.size() < 2 || (isValidSlotId(data.slotIds[1]) && data.slotIds[1] != data.slotIds[0]))
+            && (data.slotIds.size() < 3 || (isValidSlotId(data.slotIds[2]) && data.slotIds[2] != data.slotIds[0] && data.slotIds[2] != data.slotIds[1]))
+          )
+        );
     }
 
-    function adminImmutableAppointmentFieldsUnchanged() {
-      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['id', 'codigo', 'nome', 'telefone', 'servico', 'servicoId', 'criadoEm']);
+    function isValidAppointmentData(data) {
+      return hasOnlyAllowedFields(data, appointmentFields())
+        && hasRequiredFields(data, ['id', 'codigo', 'consultaId', 'nome', 'telefone', 'servico', 'servicoId', 'profissionalId', 'profissionalNome', 'data', 'horario', 'duracaoMinutos', 'preco', 'status', 'slotIds', 'criadoEm', 'atualizadoEm'])
+        && validString(data, 'id', 1, 80)
+        && validString(data, 'codigo', 10, 10)
+        && data.codigo.matches('^BLK-[A-Z2-9]{6}$')
+        && isValidLookupId(data.consultaId)
+        && validString(data, 'nome', 2, 80)
+        && isValidPhone(data.telefone)
+        && validString(data, 'servico', 1, 80)
+        && validString(data, 'servicoId', 1, 80)
+        && validString(data, 'profissionalId', 1, 80)
+        && validString(data, 'profissionalNome', 1, 80)
+        && isValidDate(data.data)
+        && isValidTime(data.horario)
+        && data.duracaoMinutos is number
+        && data.duracaoMinutos > 0
+        && data.duracaoMinutos <= 90
+        && data.preco is number
+        && data.preco >= 0
+        && data.preco <= 10000
+        && validOptionalString(data, 'observacoes', 300)
+        && isValidStatus(data.status)
+        && slotIdsAreValid(data)
+        && validString(data, 'criadoEm', 10, 40)
+        && validString(data, 'atualizadoEm', 10, 40);
+    }
+
+    function sameAppointmentRecord(a, b) {
+      return a.id == b.id
+        && a.codigo == b.codigo
+        && a.consultaId == b.consultaId
+        && a.nome == b.nome
+        && a.telefone == b.telefone
+        && a.servico == b.servico
+        && a.servicoId == b.servicoId
+        && a.profissionalId == b.profissionalId
+        && a.profissionalNome == b.profissionalNome
+        && a.data == b.data
+        && a.horario == b.horario
+        && a.duracaoMinutos == b.duracaoMinutos
+        && a.preco == b.preco
+        && a.observacoes == b.observacoes
+        && a.status == b.status
+        && a.slotIds == b.slotIds
+        && a.criadoEm == b.criadoEm
+        && a.atualizadoEm == b.atualizadoEm;
+    }
+
+    function lookupAfterMatches(appointmentId, data) {
+      return existsAfter(/databases/$(database)/documents/consultasAgendamento/$(data.consultaId))
+        && isValidAppointmentData(getAfter(/databases/$(database)/documents/consultasAgendamento/$(data.consultaId)).data)
+        && sameAppointmentRecord(data, getAfter(/databases/$(database)/documents/consultasAgendamento/$(data.consultaId)).data)
+        && getAfter(/databases/$(database)/documents/consultasAgendamento/$(data.consultaId)).data.id == appointmentId;
+    }
+
+    function appointmentAfterMatches(appointmentId, data) {
+      return existsAfter(/databases/$(database)/documents/agendamentos/$(appointmentId))
+        && isValidAppointmentData(getAfter(/databases/$(database)/documents/agendamentos/$(appointmentId)).data)
+        && sameAppointmentRecord(data, getAfter(/databases/$(database)/documents/agendamentos/$(appointmentId)).data)
+        && data.id == appointmentId;
+    }
+
+    function slotBelongsToAppointment(data, slotId) {
+      return data.slotIds is list
+        && (
+          (data.slotIds.size() > 0 && data.slotIds[0] == slotId)
+          || (data.slotIds.size() > 1 && data.slotIds[1] == slotId)
+          || (data.slotIds.size() > 2 && data.slotIds[2] == slotId)
+        );
+    }
+
+    function slotAfterMatches(slotId, appointmentId) {
+      return existsAfter(/databases/$(database)/documents/ocupacaoHorarios/$(slotId))
+        && getAfter(/databases/$(database)/documents/ocupacaoHorarios/$(slotId)).data.agendamentoId == appointmentId;
+    }
+
+    function requiredSlotsReserved(appointmentId, data) {
+      return !isBlockingStatus(data.status)
+        || (
+          slotAfterMatches(data.slotIds[0], appointmentId)
+          && (data.slotIds.size() < 2 || slotAfterMatches(data.slotIds[1], appointmentId))
+          && (data.slotIds.size() < 3 || slotAfterMatches(data.slotIds[2], appointmentId))
+        );
+    }
+
+    function newDataKeepsSlot(newData, slotId) {
+      return (newData.slotIds.size() > 0 && newData.slotIds[0] == slotId)
+        || (newData.slotIds.size() > 1 && newData.slotIds[1] == slotId)
+        || (newData.slotIds.size() > 2 && newData.slotIds[2] == slotId);
+    }
+
+    function oldSlotReleased(newData, slotId) {
+      return newDataKeepsSlot(newData, slotId)
+        || !existsAfter(/databases/$(database)/documents/ocupacaoHorarios/$(slotId));
+    }
+
+    function oldSlotsReleased(oldData, newData) {
+      return oldData.slotIds is list
+        && (oldData.slotIds.size() < 1 || oldSlotReleased(newData, oldData.slotIds[0]))
+        && (oldData.slotIds.size() < 2 || oldSlotReleased(newData, oldData.slotIds[1]))
+        && (oldData.slotIds.size() < 3 || oldSlotReleased(newData, oldData.slotIds[2]));
+    }
+
+    function clientImmutableFieldsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'id',
+        'codigo',
+        'consultaId',
+        'nome',
+        'telefone',
+        'servico',
+        'servicoId',
+        'duracaoMinutos',
+        'preco',
+        'observacoes',
+        'criadoEm'
+      ]);
+    }
+
+    function clientCancellation() {
+      return isClientMutableStatus(resource.data.status)
+        && request.resource.data.status == 'cancelado'
+        && request.resource.data.slotIds.size() == 0
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'slotIds', 'atualizadoEm'])
+        && oldSlotsReleased(resource.data, request.resource.data);
+    }
+
+    function clientReschedule(appointmentId) {
+      return isClientMutableStatus(resource.data.status)
+        && request.resource.data.status == 'pendente'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['profissionalId', 'profissionalNome', 'data', 'horario', 'status', 'slotIds', 'atualizadoEm'])
+        && requiredSlotsReserved(appointmentId, request.resource.data)
+        && oldSlotsReleased(resource.data, request.resource.data);
+    }
+
+    function clientAppointmentUpdateIsValid(appointmentId) {
+      return isValidAppointmentData(request.resource.data)
+        && request.resource.data.id == appointmentId
+        && clientImmutableFieldsUnchanged()
+        && lookupAfterMatches(appointmentId, request.resource.data)
+        && (clientCancellation() || clientReschedule(appointmentId));
+    }
+
+    function publicCreateIsValid(appointmentId) {
+      return request.resource.data.id == appointmentId
+        && request.resource.data.status == 'pendente'
+        && isValidAppointmentData(request.resource.data)
+        && lookupAfterMatches(appointmentId, request.resource.data)
+        && requiredSlotsReserved(appointmentId, request.resource.data);
+    }
+
+    function isValidSlotData(data, slotId) {
+      return data.keys().hasOnly(['agendamentoId', 'profissionalId', 'data', 'horario', 'status', 'criadoEm', 'atualizadoEm'])
+        && data.keys().hasAll(['agendamentoId', 'profissionalId', 'data', 'horario', 'status', 'criadoEm', 'atualizadoEm'])
+        && validString(data, 'agendamentoId', 1, 80)
+        && validString(data, 'profissionalId', 1, 80)
+        && isValidDate(data.data)
+        && isValidTime(data.horario)
+        && isValidStatus(data.status)
+        && validString(data, 'criadoEm', 10, 40)
+        && validString(data, 'atualizadoEm', 10, 40)
+        && slotId == data.profissionalId + '_' + data.data + '_' + data.horario;
+    }
+
+    function slotCreateIsLinked(slotId) {
+      return isValidSlotData(request.resource.data, slotId)
+        && existsAfter(/databases/$(database)/documents/agendamentos/$(request.resource.data.agendamentoId))
+        && isBlockingStatus(getAfter(/databases/$(database)/documents/agendamentos/$(request.resource.data.agendamentoId)).data.status)
+        && slotBelongsToAppointment(getAfter(/databases/$(database)/documents/agendamentos/$(request.resource.data.agendamentoId)).data, slotId)
+        && request.resource.data.profissionalId == getAfter(/databases/$(database)/documents/agendamentos/$(request.resource.data.agendamentoId)).data.profissionalId
+        && request.resource.data.data == getAfter(/databases/$(database)/documents/agendamentos/$(request.resource.data.agendamentoId)).data.data;
+    }
+
+    function slotDeleteIsLinked(slotId) {
+      return resource.data.agendamentoId is string
+        && existsAfter(/databases/$(database)/documents/agendamentos/$(resource.data.agendamentoId))
+        && (
+          !isBlockingStatus(getAfter(/databases/$(database)/documents/agendamentos/$(resource.data.agendamentoId)).data.status)
+          || !slotBelongsToAppointment(getAfter(/databases/$(database)/documents/agendamentos/$(resource.data.agendamentoId)).data, slotId)
+        );
     }
 
     function catalogFields() {
@@ -167,11 +377,39 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    match /agendamentos/{id} {
+    match /agendamentos/{appointmentId} {
       allow read: if isAdmin();
-      allow create: if isValidAppointment() && publicCreateIsPending();
-      allow update: if isAdmin() && isValidAppointment() && adminImmutableAppointmentFieldsUnchanged();
+      allow create: if publicCreateIsValid(appointmentId);
+      allow update: if (isAdmin() && isValidAppointmentData(request.resource.data))
+        || clientAppointmentUpdateIsValid(appointmentId);
       allow delete: if isAdmin();
+    }
+
+    match /consultasAgendamento/{lookupId} {
+      allow get: if isValidLookupId(lookupId);
+      allow list: if isAdmin();
+      allow create: if lookupId == request.resource.data.consultaId
+        && isValidAppointmentData(request.resource.data)
+        && request.resource.data.status == 'pendente'
+        && appointmentAfterMatches(request.resource.data.id, request.resource.data)
+        && requiredSlotsReserved(request.resource.data.id, request.resource.data);
+      allow update: if (isAdmin() && isValidAppointmentData(request.resource.data))
+        || (
+          lookupId == resource.data.consultaId
+          && lookupId == request.resource.data.consultaId
+          && clientImmutableFieldsUnchanged()
+          && appointmentAfterMatches(request.resource.data.id, request.resource.data)
+          && (clientCancellation() || clientReschedule(request.resource.data.id))
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /ocupacaoHorarios/{slotId} {
+      allow get: if isValidSlotId(slotId);
+      allow list: if isAdmin();
+      allow create: if isAdmin() || slotCreateIsLinked(slotId);
+      allow update: if isAdmin() && isValidSlotData(request.resource.data, slotId);
+      allow delete: if isAdmin() || slotDeleteIsLinked(slotId);
     }
 
     match /{document=**} {

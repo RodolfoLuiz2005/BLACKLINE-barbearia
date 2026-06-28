@@ -1,9 +1,9 @@
 import { BLACKLINE_CONFIG } from './blackline-config.js';
-import { GoogleAuthProvider, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signOut } from 'firebase/auth';
+import { getIdTokenResult, GoogleAuthProvider, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signOut } from 'firebase/auth';
 import { getBlacklineAuth } from './firebase-config.js';
 import { loadFirebaseAppointments, updateFirebaseAppointment } from './firebase-data.js';
 
-const { business, services, barbers } = BLACKLINE_CONFIG;
+const { admin, business, services, barbers } = BLACKLINE_CONFIG;
 const STATUS = {
   pendente: { label: 'Pendente', className: 'pending' },
   confirmado: { label: 'Confirmado', className: 'confirmed' },
@@ -99,13 +99,30 @@ function friendlyAuthError(error) {
   return 'Nao foi possivel autenticar. Verifique a conta e tente novamente.';
 }
 
+async function isAuthorizedAdminUser(user) {
+  if (!user) return false;
+  const token = await getIdTokenResult(user, true);
+  const allowedUids = new Set(admin?.allowedUids || []);
+  const allowedEmails = new Set((admin?.allowedEmails || []).map(email => String(email).toLowerCase()));
+  const email = String(user.email || '').toLowerCase();
+  return token.claims.admin === true
+    || allowedUids.has(user.uid)
+    || (user.emailVerified === true && allowedEmails.has(email));
+}
+
+async function loadAppointmentsForAdmin() {
+  const rows = await loadFirebaseAppointments();
+  saveAppointments(rows);
+  renderTable();
+  return rows;
+}
 async function refreshAppointments() {
   try {
-    saveAppointments(await loadFirebaseAppointments());
-    renderTable();
+    await loadAppointmentsForAdmin();
   } catch (err) {
     console.error('Erro ao carregar agendamentos do Firestore.', err);
-    toast('Nao foi possivel carregar a agenda.', 'error');
+    toast('Nao foi possivel carregar a agenda. Verifique suas permissoes.', 'error');
+    throw err;
   }
 }
 
@@ -256,8 +273,8 @@ async function updateStatus(id, status) {
     history: [...previousHistory, historyEntry('admin_status_changed', { status })]
   };
   try {
-    await updateFirebaseAppointment(rows[index].code || id, { status });
-    rows[index] = { ...rows[index], ...patch, updatedAt: new Date().toISOString() };
+    const updated = await updateFirebaseAppointment(rows[index], { status });
+    rows[index] = { ...rows[index], ...patch, ...updated, updatedAt: updated.updatedAt || new Date().toISOString() };
     saveAppointments(rows);
     renderTable();
     toast('Status atualizado para ' + STATUS[status].label + '.');
@@ -282,7 +299,7 @@ function attachEvents() {
     byId('filter-search').value = '';
     renderTable();
   });
-  byId('refresh-list').addEventListener('click', () => { refreshAppointments(); toast('Painel atualizado.'); });
+  byId('refresh-list').addEventListener('click', () => { refreshAppointments().then(() => toast('Painel atualizado.')).catch(() => {}); });
   byId('appointments-body').addEventListener('click', event => {
     const target = event.target.closest('[data-action]');
     if (!target) return;
@@ -294,15 +311,30 @@ function attachEvents() {
 
 async function initAuthState() {
   const auth = getBlacklineAuth();
-  onAuthStateChanged(auth, user => {
+  onAuthStateChanged(auth, async user => {
     if (!user) {
       showAdminLogin();
       return;
     }
-    showAdminPanel();
-    attachEvents();
-    refreshAppointments();
-    toast('Acesso liberado.');
+
+    showAdminLogin('Validando permissao administrativa...');
+    try {
+      const allowed = await isAuthorizedAdminUser(user);
+      if (!allowed) {
+        await signOut(auth);
+        showAdminLogin('Acesso negado. Esta conta nao tem permissao administrativa.');
+        return;
+      }
+
+      attachEvents();
+      await loadAppointmentsForAdmin();
+      showAdminPanel();
+      toast('Acesso liberado.');
+    } catch (err) {
+      console.error('Falha ao validar acesso administrativo.', err);
+      await signOut(auth).catch(() => {});
+      showAdminLogin('Acesso negado ou sem permissao para carregar a agenda.');
+    }
   });
 }
 

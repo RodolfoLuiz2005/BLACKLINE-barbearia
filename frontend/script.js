@@ -1,12 +1,12 @@
 import { BLACKLINE_CONFIG } from './blackline-config.js';
-import { createFirebaseAppointment, loadFirebaseAppointments } from './firebase-data.js';
+import { cancelFirebaseAppointment, createFirebaseAppointment, getFirebaseAppointmentByClient, isPermissionError, isSlotTakenError, loadFirebaseOccupiedSlots, makeAppointmentSlotId, makeAppointmentSlotIds, rescheduleFirebaseAppointment } from './firebase-data.js';
 
 const { business, assets, services, barbers, sampleTestimonials, schedule, storageKeys } = BLACKLINE_CONFIG;
 const statusLabels = {
   pendente: 'Pendente',
   confirmado: 'Confirmado',
   em_atendimento: 'Em atendimento',
-  concluido: 'Concluído',
+  concluido: 'ConcluÃ­do',
   cancelado: 'Cancelado'
 };
 const BOOKING_BLOCKING_STATUSES = new Set(['pendente', 'confirmado', 'em_atendimento']);
@@ -17,14 +17,14 @@ const MANAGE_MAX_ATTEMPTS = 5;
 const MANAGE_LOCK_MS = 5 * 60 * 1000;
 const NAME_MAX_LENGTH = 80;
 const NOTE_MAX_LENGTH = 300;
-const GENERIC_MANAGE_ERROR = 'Não foi possível consultar o agendamento. Confira os dados e tente novamente.';
+const GENERIC_MANAGE_ERROR = 'NÃ£o foi possÃ­vel consultar o agendamento. Confira os dados e tente novamente.';
 
 let managedAppointmentId = '';
 let managedAccessToken = '';
 let currentStep = 0;
 const BOOKING_STEP_COUNT = 6;
 const TIME_PERIODS = [
-  { label: 'Manhã', slots: ['09:00', '09:30', '10:00', '10:30', '11:00'] },
+  { label: 'ManhÃ£', slots: ['09:00', '09:30', '10:00', '10:30', '11:00'] },
   { label: 'Tarde', slots: ['14:00', '14:30', '15:00', '15:30', '16:00'] },
   { label: 'Noite', slots: ['17:00', '17:30', '18:00', '18:30', '19:00'] }
 ];
@@ -32,10 +32,10 @@ const BOOKABLE_TIME_SLOTS = TIME_PERIODS.flatMap(period => period.slots);
 let calendarCursor = new Date();
 calendarCursor.setDate(1);
 calendarCursor.setHours(12, 0, 0, 0);
-const WEEKDAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-const WEEKDAYS_LONG = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+const WEEKDAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'SÃ¡b'];
+const WEEKDAYS_LONG = ['Domingo', 'Segunda', 'TerÃ§a', 'Quarta', 'Quinta', 'Sexta', 'SÃ¡bado'];
 const MONTHS_SHORT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-const MONTHS_LONG = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const MONTHS_LONG = ['janeiro', 'fevereiro', 'marÃ§o', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 
 function byId(id) {
   return document.getElementById(id);
@@ -98,11 +98,14 @@ function sanitizeNoteField(value) {
 }
 function maskPhone(value) {
   const digits = onlyDigits(value);
-  if (digits.length < 4) return '••••';
+  if (digits.length < 4) return 'â€¢â€¢â€¢â€¢';
   return `(**) *****-${digits.slice(-4)}`;
 }
 
 let appointmentsCache = [];
+const slotOccupancyCache = new Map();
+const slotOccupancyLoads = new Map();
+const slotOccupancyFailures = new Set();
 
 function loadAppointments() {
   return appointmentsCache;
@@ -110,24 +113,79 @@ function loadAppointments() {
 
 function saveAppointments(rows) {
   appointmentsCache = Array.isArray(rows) ? rows : [];
-  localStorage.setItem(storageKeys.appointments, JSON.stringify(appointmentsCache));
-}
-
-function loadLocalAppointmentsFallback() {
   try {
-    return JSON.parse(localStorage.getItem(storageKeys.appointments) || '[]');
-  } catch {
-    return [];
-  }
-}
-
-async function refreshAppointmentsFromFirebase() {
-  try {
-    saveAppointments(await loadFirebaseAppointments());
+    localStorage.setItem(storageKeys.appointments, JSON.stringify(appointmentsCache.slice(-5)));
   } catch (err) {
-    saveAppointments(loadLocalAppointmentsFallback());
-    console.warn('Nao foi possivel carregar agendamentos do Firestore; usando cache local.', err);
+    console.warn('Nao foi possivel atualizar o cache auxiliar local.', err);
   }
+}
+
+function rememberAppointment(appointment) {
+  const rows = loadAppointments().filter(item => item.id !== appointment.id);
+  rows.push(appointment);
+  saveAppointments(rows);
+}
+
+function slotCacheKey(dateValue, barberId) {
+  return `${barberId}|${dateValue}`;
+}
+
+function appointmentSlotIds(appointment, service = null) {
+  return makeAppointmentSlotIds({
+    ...appointment,
+    durationMinutes: service?.durationMinutes || appointment.durationMinutes || schedule.intervalMinutes
+  }, schedule.intervalMinutes);
+}
+
+function slotIdsForDay(dateValue, barberId) {
+  return getScheduleSlots(dateValue, barberId).map(time => makeAppointmentSlotId(barberId, dateValue, time));
+}
+
+function isSlotOccupancyLoaded(dateValue, barberId) {
+  return slotOccupancyCache.has(slotCacheKey(dateValue, barberId));
+}
+
+function hasSlotOccupancyFailed(dateValue, barberId) {
+  return slotOccupancyFailures.has(slotCacheKey(dateValue, barberId));
+}
+
+async function ensureSlotOccupancyLoaded(dateValue, barberId) {
+  if (!dateValue || !barberId || !isDateOpen(dateValue, barberId)) return new Map();
+  const key = slotCacheKey(dateValue, barberId);
+  if (slotOccupancyCache.has(key)) return slotOccupancyCache.get(key);
+  if (slotOccupancyLoads.has(key)) return slotOccupancyLoads.get(key);
+
+  const promise = loadFirebaseOccupiedSlots(slotIdsForDay(dateValue, barberId))
+    .then(slots => {
+      slotOccupancyCache.set(key, slots);
+      slotOccupancyFailures.delete(key);
+      return slots;
+    })
+    .catch(err => {
+      slotOccupancyFailures.add(key);
+      throw err;
+    })
+    .finally(() => slotOccupancyLoads.delete(key));
+
+  slotOccupancyLoads.set(key, promise);
+  return promise;
+}
+
+function updateCachedSlotsForAppointment(appointment, mode = 'upsert') {
+  (appointment.slotIds || []).forEach(slotId => {
+    const key = slotCacheKey(appointment.date, appointment.barberId);
+    if (!slotOccupancyCache.has(key)) return;
+    const slots = slotOccupancyCache.get(key);
+    if (mode === 'delete') slots.delete(slotId);
+    else slots.set(slotId, {
+      id: slotId,
+      appointmentId: appointment.id,
+      barberId: appointment.barberId,
+      date: appointment.date,
+      time: slotId.split('_').pop() || appointment.time,
+      status: appointment.status || 'pendente'
+    });
+  });
 }
 
 function randomCodeSuffix(length = 6) {
@@ -141,7 +199,7 @@ function nextCode() {
     const code = `BLK-${randomCodeSuffix()}`;
     if (!existing.has(code)) return code;
   }
-  throw new Error('Não foi possível gerar um código seguro. Tente novamente.');
+  throw new Error('NÃ£o foi possÃ­vel gerar um cÃ³digo seguro. Tente novamente.');
 }
 
 function minutesFromTime(value) {
@@ -207,16 +265,13 @@ function getScheduleSlots(dateValue, barberId) {
 
 function getBookedSlots(dateValue, barberId, ignoreId = '') {
   const booked = new Set();
-  loadAppointments()
-    .filter(item => item.id !== ignoreId && item.date === dateValue && item.barberId === barberId && BOOKING_BLOCKING_STATUSES.has(item.status || 'pendente'))
-    .forEach(item => {
-      const service = services.find(serviceItem => serviceItem.id === item.serviceId);
-      const slotsCount = calculateServiceSlots(service || { durationMinutes: item.durationMinutes || schedule.intervalMinutes });
-      let start = minutesFromTime(item.time);
-      for (let index = 0; index < slotsCount; index += 1) {
-        booked.add(timeFromMinutes(start + (index * schedule.intervalMinutes)));
-      }
-    });
+  const slots = slotOccupancyCache.get(slotCacheKey(dateValue, barberId));
+  if (!slots) return booked;
+  slots.forEach(slot => {
+    if (slot.appointmentId !== ignoreId && BOOKING_BLOCKING_STATUSES.has(slot.status || 'pendente')) {
+      booked.add(slot.time);
+    }
+  });
   return booked;
 }
 
@@ -226,6 +281,7 @@ function occupiedTimes(dateValue, barberId, ignoreId = '') {
 
 function isSlotAvailable(dateValue, barberId, timeValue, service = getSelectedService(), ignoreId = '') {
   if (!service || !barberId || !isDateOpen(dateValue, barberId) || isPastSlot(dateValue, timeValue)) return false;
+  if (!isSlotOccupancyLoaded(dateValue, barberId) || hasSlotOccupancyFailed(dateValue, barberId)) return false;
   const slots = getScheduleSlots(dateValue, barberId);
   const slotsNeeded = calculateServiceSlots(service);
   const start = minutesFromTime(timeValue);
@@ -262,7 +318,7 @@ function getNextAvailableDays(daysCount = 7) {
       monthShort: MONTHS_SHORT[date.getMonth()],
       monthLong: MONTHS_LONG[date.getMonth()],
       available: open && slots.length > 0,
-      availabilityText: open && slots.length > 0 ? slots.length + ' livres' : 'Sem horários'
+      availabilityText: open && slots.length > 0 ? slots.length + ' livres' : 'Sem horÃ¡rios'
     };
   });
 }
@@ -292,7 +348,7 @@ function getTimeSlotsByDay(dateValue, barberId, ignoreId = '') {
       time,
       period: periodFor(time),
       available,
-      status: available ? 'Disponível' : bookedByExisting ? 'Ocupado' : 'Indisponível'
+      status: available ? 'DisponÃ­vel' : bookedByExisting ? 'Ocupado' : 'IndisponÃ­vel'
     };
   });
 }
@@ -364,7 +420,7 @@ function renderServices() {
       </div>
       <h3>${escapeHtml(service.name)}</h3>
       <p>${escapeHtml(service.description)}</p>
-      <button class="ghost-button" type="button" data-service="${escapeHtml(service.id)}">Agendar este serviço</button>
+      <button class="ghost-button" type="button" data-service="${escapeHtml(service.id)}">Agendar este serviÃ§o</button>
     </article>
   `).join('');
 }
@@ -394,7 +450,7 @@ function renderTestimonials() {
 }
 
 function serviceOptions(selected = '') {
-  return '<option value="">Escolha o serviço</option>' + services
+  return '<option value="">Escolha o serviÃ§o</option>' + services
     .map(service => `<option value="${escapeHtml(service.id)}" ${service.id === selected ? 'selected' : ''}>${escapeHtml(service.name)} - ${money(service.price)}</option>`)
     .join('');
 }
@@ -435,17 +491,17 @@ function setMinDate() {
 }
 
 function fillTimeSelect(select, slots) {
-  select.innerHTML = '<option value="">Escolha o horário</option>' + slots.map(time => `<option value="${time}">${time}</option>`).join('');
-  if (!slots.length) select.innerHTML = '<option value="">Sem horários disponíveis</option>';
+  select.innerHTML = '<option value="">Escolha o horÃ¡rio</option>' + slots.map(time => `<option value="${time}">${time}</option>`).join('');
+  if (!slots.length) select.innerHTML = '<option value="">Sem horÃ¡rios disponÃ­veis</option>';
 }
 
 function clearSelectedDateTime() {
   byId('booking-date').value = '';
   byId('booking-time').value = '';
   byId('selected-day-label').textContent = byId('booking-service').value && byId('booking-barber').value
-    ? 'Escolha uma data no calendário.'
-    : 'Escolha serviço e barbeiro para liberar a data.';
-  byId('selected-time-label').textContent = 'Selecione uma data para ver os horários.';
+    ? 'Escolha uma data no calendÃ¡rio.'
+    : 'Escolha serviÃ§o e barbeiro para liberar a data.';
+  byId('selected-time-label').textContent = 'Selecione uma data para ver os horÃ¡rios.';
 }
 
 function hasAvailableTimes(dateValue, barberId) {
@@ -482,6 +538,14 @@ function calendarDayState(date, iso, barberId) {
     return { available: false, className: 'is-disabled is-offday', label: 'Folga' };
   }
 
+  if (hasSlotOccupancyFailed(iso, barberId)) {
+    return { available: false, className: 'is-disabled is-full', label: 'Indisponivel' };
+  }
+
+  if (!isSlotOccupancyLoaded(iso, barberId)) {
+    return { available: true, className: 'is-available', label: 'Ver horarios' };
+  }
+
   if (!hasAvailableTimes(iso, barberId)) {
     return { available: false, className: 'is-disabled is-full', label: 'Sem horario' };
   }
@@ -501,10 +565,10 @@ function renderMiniCalendar() {
   byId('calendar-month-label').textContent = calendarMonthLabel(calendarCursor);
   byId('calendar-prev').disabled = calendarCursor <= new Date(new Date().getFullYear(), new Date().getMonth(), 1, 12, 0, 0, 0);
   daysWrapper.setAttribute('role', 'grid');
-  daysWrapper.setAttribute('aria-label', 'Dias disponíveis para agendamento em ' + calendarMonthLabel(calendarCursor));
+  daysWrapper.setAttribute('aria-label', 'Dias disponÃ­veis para agendamento em ' + calendarMonthLabel(calendarCursor));
 
   if (!unlocked) {
-    daysWrapper.innerHTML = '<p class="picker-empty calendar-empty">Escolha serviço e barbeiro.</p>';
+    daysWrapper.innerHTML = '<p class="picker-empty calendar-empty">Escolha serviÃ§o e barbeiro.</p>';
     calendar.hidden = true;
     return;
   }
@@ -552,16 +616,44 @@ function closeMiniCalendar() {
   if (calendar && !calendar.closest('.booking-slide')) calendar.hidden = true;
 }
 
-function selectDate(dateValue) {
+async function selectDate(dateValue) {
   const barberId = byId('booking-barber').value;
-  if (!isDateAvailable(dateValue, barberId)) {
-    showScheduleToast('Esta data não possui horários livres.', 'error');
+  if (!byId('booking-service').value || !barberId || !isDateOpen(dateValue, barberId)) {
+    showScheduleToast('Esta data nao esta disponivel para este barbeiro.', 'error');
     return;
   }
+
   byId('booking-date').value = dateValue;
   byId('booking-time').value = '';
   byId('selected-day-label').textContent = longDateLabel(dateValue);
-  byId('selected-time-label').textContent = 'Escolha um horário disponível.';
+  byId('selected-time-label').textContent = 'Consultando agenda online...';
+  renderMiniCalendar();
+  renderTimeGroups();
+
+  try {
+    await ensureSlotOccupancyLoaded(dateValue, barberId);
+  } catch (err) {
+    console.error('Falha ao consultar disponibilidade no Firestore.', err);
+    byId('selected-time-label').textContent = 'Nao foi possivel carregar os horarios.';
+    showScheduleToast('Nao foi possivel consultar a agenda online. Tente novamente.', 'error');
+    renderMiniCalendar();
+    renderTimeGroups();
+    return;
+  }
+
+  if (!hasAvailableTimes(dateValue, barberId)) {
+    byId('booking-time').value = '';
+    byId('selected-time-label').textContent = 'Nenhum horario livre nesta data.';
+    showScheduleToast('Esta data nao possui horarios livres.', 'error');
+    renderMiniCalendar();
+    renderTimeGroups();
+    updateBookingVisibility();
+    updateSteps();
+    updateScheduleSummary();
+    return;
+  }
+
+  byId('selected-time-label').textContent = 'Escolha um horario disponivel.';
   closeMiniCalendar();
   renderMiniCalendar();
   renderTimeGroups();
@@ -588,7 +680,7 @@ function renderAvailableTimes(dateValue, barberId, selectedTime) {
       + '</div></section>';
   }).join('');
 
-  return content || '<p class="picker-empty">Nenhum horário livre para esta data.</p>';
+  return content || '<p class="picker-empty">Nenhum horÃ¡rio livre para esta data.</p>';
 }
 function renderTimeGroups() {
   const wrapper = byId('time-groups');
@@ -607,8 +699,19 @@ function renderTimeGroups() {
   }
 
   const barber = barbers.find(item => item.id === barberId);
-  wrapper.innerHTML = '<div class="time-context"><strong>Horários disponíveis para ' + escapeHtml(barber?.name || 'o barbeiro') + '</strong><span>' + escapeHtml(longDateLabel(selectedDate)) + '</span></div>'
-    + renderAvailableTimes(selectedDate, barberId, selectedTime);
+  const context = '<div class="time-context"><strong>Horarios disponiveis para ' + escapeHtml(barber?.name || 'o barbeiro') + '</strong><span>' + escapeHtml(longDateLabel(selectedDate)) + '</span></div>';
+
+  if (hasSlotOccupancyFailed(selectedDate, barberId)) {
+    wrapper.innerHTML = context + '<p class="picker-empty">Nao foi possivel consultar a agenda online. Tente novamente.</p>';
+    return;
+  }
+
+  if (!isSlotOccupancyLoaded(selectedDate, barberId)) {
+    wrapper.innerHTML = context + '<p class="picker-empty">Consultando agenda online...</p>';
+    return;
+  }
+
+  wrapper.innerHTML = context + renderAvailableTimes(selectedDate, barberId, selectedTime);
 }
 
 function customerDataReady() {
@@ -689,23 +792,34 @@ function showScheduleToast(message, type = 'ok') {
   showScheduleToast.timer = setTimeout(() => toast.classList.remove('show'), 2300);
 }
 
-function selectScheduleSlot(dateValue, time) {
+async function selectScheduleSlot(dateValue, time) {
   const barberId = byId('booking-barber').value;
   const service = getSelectedService();
+  try {
+    await ensureSlotOccupancyLoaded(dateValue, barberId);
+  } catch (err) {
+    console.error('Falha ao validar horario no Firestore.', err);
+    showScheduleToast('Nao foi possivel validar este horario agora.', 'error');
+    renderTimeGroups();
+    return;
+  }
+
   if (!isSlotAvailable(dateValue, barberId, time, service)) {
-    showScheduleToast('Horário ocupado ou indisponível para este serviço.', 'error');
+    showScheduleToast('Horario ocupado ou indisponivel para este servico.', 'error');
+    renderMiniCalendar();
+    renderTimeGroups();
     return;
   }
   byId('booking-date').value = dateValue;
   byId('booking-time').value = time;
   byId('selected-day-label').textContent = longDateLabel(dateValue);
-  byId('selected-time-label').textContent = 'Horário selecionado: ' + time;
+  byId('selected-time-label').textContent = 'Horario selecionado: ' + time;
   renderMiniCalendar();
   renderTimeGroups();
   updateBookingVisibility();
   updateSteps();
   updateScheduleSummary();
-  showScheduleToast('Horário selecionado: ' + time);
+  showScheduleToast('Horario selecionado: ' + time);
   window.setTimeout(() => goToStep(4), 200);
 }
 
@@ -713,14 +827,23 @@ function selectTime(time) {
   selectScheduleSlot(byId('booking-date').value, time);
 }
 
-function updateTimes() {
+async function updateTimes() {
   const wrapper = byId('time-groups');
   const date = byId('booking-date').value;
   const barberId = byId('booking-barber').value;
-  if (date && !isDateAvailable(date, barberId)) {
-    clearSelectedDateTime();
-  }
   wrapper.classList.add('is-recalculating');
+
+  if (date && barberId && isDateOpen(date, barberId)) {
+    try {
+      await ensureSlotOccupancyLoaded(date, barberId);
+    } catch (err) {
+      console.error('Falha ao atualizar disponibilidade no Firestore.', err);
+    }
+    if (isSlotOccupancyLoaded(date, barberId) && !hasAvailableTimes(date, barberId)) {
+      clearSelectedDateTime();
+    }
+  }
+
   renderMiniCalendar();
   renderTimeGroups();
   updateBookingVisibility();
@@ -728,7 +851,7 @@ function updateTimes() {
   window.setTimeout(() => wrapper.classList.remove('is-recalculating'), 180);
 }
 
-function updateRescheduleTimes() {
+async function updateRescheduleTimes() {
   const date = byId('reschedule-date').value;
   const barberId = byId('reschedule-barber').value;
   const select = byId('reschedule-time');
@@ -738,7 +861,14 @@ function updateRescheduleTimes() {
   }
   const appointment = getAppointment(managedAppointmentId);
   const service = services.find(item => item.id === appointment?.serviceId);
-  fillTimeSelect(select, availableTimes(date, barberId, managedAppointmentId, service));
+  select.innerHTML = '<option value="">Consultando agenda...</option>';
+  try {
+    await ensureSlotOccupancyLoaded(date, barberId);
+    fillTimeSelect(select, availableTimes(date, barberId, managedAppointmentId, service));
+  } catch (err) {
+    console.error('Falha ao carregar horarios para reagendamento.', err);
+    select.innerHTML = '<option value="">Nao foi possivel carregar horarios</option>';
+  }
 }
 
 function scrollToBooking() {
@@ -754,25 +884,25 @@ function updateSelectedCards() {
   document.querySelectorAll('[data-booking-barber]').forEach(card => card.classList.toggle('is-selected', card.dataset.bookingBarber === barberId));
 }
 
-function selectService(id) {
+async function selectService(id) {
   const changed = byId('booking-service').value !== id;
   byId('booking-service').value = id;
   if (changed) clearSelectedDateTime();
   closeMiniCalendar();
   updateSelectedCards();
-  updateTimes();
+  await updateTimes();
   scrollToBooking();
   updateSteps();
   window.setTimeout(() => goToStep(1), 200);
 }
 
-function selectBarber(id) {
+async function selectBarber(id) {
   const changed = byId('booking-barber').value !== id;
   byId('booking-barber').value = id;
   if (changed) clearSelectedDateTime();
   closeMiniCalendar();
   updateSelectedCards();
-  updateTimes();
+  await updateTimes();
   scrollToBooking();
   updateSteps();
   window.setTimeout(() => goToStep(2), 200);
@@ -805,11 +935,11 @@ function renderConfirmationSummary() {
     return fragment;
   }
   const list = document.createElement('dl');
-  appendDetail(list, 'Serviço', service.name);
+  appendDetail(list, 'ServiÃ§o', service.name);
   appendDetail(list, 'Barbeiro', barber.name);
   appendDetail(list, 'Data', longDateLabel(date));
-  appendDetail(list, 'Horário', time);
-  appendDetail(list, 'Duração', service.duration);
+  appendDetail(list, 'HorÃ¡rio', time);
+  appendDetail(list, 'DuraÃ§Ã£o', service.duration);
   appendDetail(list, 'Valor', money(service.price));
   appendDetail(list, 'Cliente', name || '-');
   appendDetail(list, 'WhatsApp', phone ? maskPhone(phone) : '-');
@@ -843,21 +973,21 @@ function updateSteps() {
 function validateBooking(payload) {
   const errors = [];
   if (payload.name.trim().split(/\s+/).filter(Boolean).length < 2) errors.push('Informe nome e sobrenome.');
-  if (!isValidBrazilianWhatsapp(payload.phone)) errors.push('Informe um WhatsApp brasileiro válido com DDD.');
-  if (!payload.serviceId) errors.push('Escolha um serviço.');
+  if (!isValidBrazilianWhatsapp(payload.phone)) errors.push('Informe um WhatsApp brasileiro vÃ¡lido com DDD.');
+  if (!payload.serviceId) errors.push('Escolha um serviÃ§o.');
   if (!payload.barberId) errors.push('Escolha um barbeiro.');
-  if (!payload.date || !isDateOpen(payload.date, payload.barberId)) errors.push('Escolha uma data disponível.');
-  if (!payload.time) { errors.push('Escolha um horário.'); showScheduleToast('Escolha um horário livre na agenda.', 'error'); }
+  if (!payload.date || !isDateOpen(payload.date, payload.barberId)) errors.push('Escolha uma data disponÃ­vel.');
+  if (!payload.time) { errors.push('Escolha um horÃ¡rio.'); showScheduleToast('Escolha um horÃ¡rio livre na agenda.', 'error'); }
   return errors;
 }
 
 function buildWhatsappMessage(appointment) {
-  return `Olá, quero confirmar meu agendamento na ${business.name}.\n\nNome: ${appointment.name}\nServiço: ${appointment.serviceName}\nBarbeiro: ${appointment.barberName}\nData: ${formatDate(appointment.date)}\nHorário: ${appointment.time}\nCódigo: ${appointment.code}`;
+  return `OlÃ¡, quero confirmar meu agendamento na ${business.name}.\n\nNome: ${appointment.name}\nServiÃ§o: ${appointment.serviceName}\nBarbeiro: ${appointment.barberName}\nData: ${formatDate(appointment.date)}\nHorÃ¡rio: ${appointment.time}\nCÃ³digo: ${appointment.code}`;
 }
 
 function renderSuccess(appointment) {
   byId('success-title').textContent = 'Agendamento confirmado';
-  byId('success-code').textContent = 'Código: ' + appointment.code;
+  byId('success-code').textContent = 'CÃ³digo: ' + appointment.code;
   renderAppointmentDetails(byId('success-details'), appointment);
   byId('success-whatsapp').href = whatsappLink(business.whatsapp, buildWhatsappMessage(appointment));
   byId('success-card').hidden = false;
@@ -870,12 +1000,12 @@ function closeSuccessModal() {
 }
 
 async function copySuccessCode() {
-  const code = byId('success-code').textContent.replace('Código: ', '').trim();
+  const code = byId('success-code').textContent.replace('CÃ³digo: ', '').trim();
   try {
     await navigator.clipboard.writeText(code);
-    showScheduleToast('Código copiado.');
+    showScheduleToast('CÃ³digo copiado.');
   } catch {
-    showScheduleToast('Código: ' + code);
+    showScheduleToast('CÃ³digo: ' + code);
   }
 }
 
@@ -890,17 +1020,17 @@ function prepareManageFromSuccess() {
 function renderAppointmentDetails(container, appointment, options = {}) {
   container.replaceChildren();
   const details = [
-    ['Código', appointment.code],
+    ['CÃ³digo', appointment.code],
     ['Cliente', appointment.name],
     ['WhatsApp', options.maskPhone ? maskPhone(appointment.phone) : formatPhone(appointment.phone)],
-    ['Serviço', appointment.serviceName],
+    ['ServiÃ§o', appointment.serviceName],
     ['Barbeiro', appointment.barberName],
-    ['Data', formatDate(appointment.date) + ' às ' + appointment.time],
-    ['Duração', appointment.durationMinutes ? appointment.durationMinutes + ' min' : '-'],
+    ['Data', formatDate(appointment.date) + ' Ã s ' + appointment.time],
+    ['DuraÃ§Ã£o', appointment.durationMinutes ? appointment.durationMinutes + ' min' : '-'],
     ['Valor', money(appointment.price)],
     ['Status', statusLabels[appointment.status] || appointment.status]
   ];
-  if (appointment.note) details.push(['Observação', appointment.note]);
+  if (appointment.note) details.push(['ObservaÃ§Ã£o', appointment.note]);
   details.forEach(([label, value]) => {
     const row = document.createElement('p');
     const span = document.createElement('span');
@@ -943,35 +1073,50 @@ async function submitBooking(event) {
     return;
   }
 
-  if (!isSlotAvailable(payload.date, payload.barberId, payload.time, service)) {
-    feedback.textContent = 'Este horário ficou ocupado ou não comporta a duração do serviço. Escolha outro horário.';
-    feedback.className = 'form-feedback error';
-    showScheduleToast('Escolha outro horário disponível.', 'error');
-    updateTimes();
-    return;
-  }
+  payload.slotIds = appointmentSlotIds(payload, service);
 
   try {
-    await createFirebaseAppointment(payload);
+    await ensureSlotOccupancyLoaded(payload.date, payload.barberId);
   } catch (err) {
-    console.error('Falha ao registrar agendamento no Firebase.', err);
-    feedback.textContent = 'Nao foi possivel registrar o agendamento agora. Tente novamente em alguns instantes.';
+    console.error('Falha ao validar disponibilidade antes de criar.', err);
+    feedback.textContent = 'Nao foi possivel consultar a agenda online. Tente novamente em alguns instantes.';
     feedback.className = 'form-feedback error';
     return;
   }
 
-  const rows = loadAppointments();
-  rows.push(payload);
-  saveAppointments(rows);
-  feedback.textContent = 'Agendamento registrado. Guarde seu codigo para consultar depois.';  feedback.className = 'form-feedback ok';
+  if (!isSlotAvailable(payload.date, payload.barberId, payload.time, service)) {
+    feedback.textContent = 'Este horÃ¡rio ficou ocupado ou nÃ£o comporta a duraÃ§Ã£o do serviÃ§o. Escolha outro horÃ¡rio.';
+    feedback.className = 'form-feedback error';
+    showScheduleToast('Escolha outro horÃ¡rio disponÃ­vel.', 'error');
+    await updateTimes();
+    return;
+  }
+
+  let savedAppointment;
+  try {
+    savedAppointment = await createFirebaseAppointment(payload);
+  } catch (err) {
+    console.error('Falha ao registrar agendamento no Firebase.', err);
+    feedback.textContent = isSlotTakenError(err)
+      ? 'Este horario acabou de ser reservado por outro cliente. Escolha outro horario.'
+      : 'Nao foi possivel registrar o agendamento agora. Tente novamente em alguns instantes.';
+    feedback.className = 'form-feedback error';
+    await updateTimes();
+    return;
+  }
+
+  rememberAppointment(savedAppointment);
+  updateCachedSlotsForAppointment(savedAppointment);
+  feedback.textContent = 'Agendamento registrado. Guarde seu codigo para consultar depois.';
+  feedback.className = 'form-feedback ok';
   event.target.reset();
   clearSelectedDateTime();
   closeMiniCalendar();
   updateSelectedCards();
-  updateTimes();
+  await updateTimes();
   updateBookingVisibility();
   goToStep(0);
-  renderSuccess(payload);
+  renderSuccess(savedAppointment);
 }
 
 function renderManageResult(appointment) {
@@ -989,7 +1134,7 @@ function renderManageResult(appointment) {
   byId('manage-reschedule-toggle').disabled = !canChange;
 }
 
-function submitManage(event) {
+async function submitManage(event) {
   event.preventDefault();
   const feedback = byId('manage-feedback');
   const state = getManageAttemptState();
@@ -1001,8 +1146,7 @@ function submitManage(event) {
   }
   const phone = onlyDigits(byId('manage-phone').value);
   const code = normalizeCode(byId('manage-code').value);
-  const appointment = loadAppointments().find(item => item.phone === phone && normalizeCode(item.code) === code);
-  if (!isValidBrazilianWhatsapp(phone) || !code || !appointment) {
+  if (!isValidBrazilianWhatsapp(phone) || !code) {
     managedAppointmentId = '';
     managedAccessToken = '';
     byId('manage-result').hidden = true;
@@ -1011,32 +1155,73 @@ function submitManage(event) {
     feedback.className = 'form-feedback error';
     return;
   }
+
+  feedback.textContent = 'Consultando agendamento...';
+  feedback.className = 'form-feedback';
+  let appointment = null;
+  try {
+    appointment = await getFirebaseAppointmentByClient(phone, code);
+  } catch (err) {
+    console.error('Falha ao consultar agendamento no Firestore.', err);
+    feedback.textContent = isPermissionError(err)
+      ? 'Nao foi possivel validar os dados informados. Tente novamente.'
+      : 'Nao foi possivel consultar agora. Tente novamente em alguns instantes.';
+    feedback.className = 'form-feedback error';
+    return;
+  }
+
+  if (!appointment) {
+    managedAppointmentId = '';
+    managedAccessToken = '';
+    byId('manage-result').hidden = true;
+    const nextState = registerManageFailure();
+    feedback.textContent = nextState.lockUntil ? 'Muitas tentativas incorretas. Tente novamente em alguns minutos.' : GENERIC_MANAGE_ERROR;
+    feedback.className = 'form-feedback error';
+    return;
+  }
+
   clearManageAttempts();
+  rememberAppointment(appointment);
   feedback.textContent = 'Agendamento encontrado.';
   feedback.className = 'form-feedback ok';
   renderManageResult(appointment);
 }
 
-function cancelManagedAppointment() {
+async function cancelManagedAppointment() {
   const appointment = getAppointment(managedAppointmentId);
+  const feedback = byId('manage-feedback');
   if (!canClientModify(appointment)) {
-    byId('manage-feedback').textContent = 'Este agendamento não permite alteração.';
-    byId('manage-feedback').className = 'form-feedback error';
+    feedback.textContent = 'Este agendamento nao permite alteracao.';
+    feedback.className = 'form-feedback error';
     return;
   }
   if (!confirm('Cancelar este agendamento?')) return;
-  const updated = setAppointment(managedAppointmentId, { status: 'cancelado' }, historyEntry('client_cancelled'));
-  if (updated) renderManageResult(updated);
-  byId('manage-feedback').textContent = 'Agendamento cancelado.';
-  byId('manage-feedback').className = 'form-feedback ok';
+  const phone = onlyDigits(byId('manage-phone').value);
+  const code = normalizeCode(byId('manage-code').value);
+  feedback.textContent = 'Cancelando agendamento...';
+  feedback.className = 'form-feedback';
+  try {
+    const updated = await cancelFirebaseAppointment(appointment, phone, code);
+    updateCachedSlotsForAppointment(appointment, 'delete');
+    rememberAppointment(updated);
+    renderManageResult(updated);
+    feedback.textContent = 'Agendamento cancelado.';
+    feedback.className = 'form-feedback ok';
+  } catch (err) {
+    console.error('Falha ao cancelar agendamento no Firestore.', err);
+    feedback.textContent = isPermissionError(err)
+      ? 'Nao foi possivel validar seus dados para cancelar.'
+      : 'Nao foi possivel cancelar agora. Tente novamente em alguns instantes.';
+    feedback.className = 'form-feedback error';
+  }
 }
 
-function submitReschedule(event) {
+async function submitReschedule(event) {
   event.preventDefault();
   const appointment = getAppointment(managedAppointmentId);
   const feedback = byId('reschedule-feedback');
   if (!canClientModify(appointment)) {
-    feedback.textContent = 'Este agendamento não permite alteração.';
+    feedback.textContent = 'Este agendamento nao permite alteracao.';
     feedback.className = 'form-feedback error';
     return;
   }
@@ -1044,37 +1229,72 @@ function submitReschedule(event) {
   const date = byId('reschedule-date').value;
   const time = byId('reschedule-time').value;
   if (!barber || !date || !time || !isDateOpen(date, barber.id)) {
-    feedback.textContent = 'Escolha barbeiro, data e horário disponíveis.';
+    feedback.textContent = 'Escolha barbeiro, data e horario disponiveis.';
     feedback.className = 'form-feedback error';
     return;
   }
   const service = services.find(item => item.id === appointment.serviceId);
+  try {
+    await ensureSlotOccupancyLoaded(date, barber.id);
+  } catch (err) {
+    console.error('Falha ao validar disponibilidade para reagendamento.', err);
+    feedback.textContent = 'Nao foi possivel consultar a agenda online. Tente novamente.';
+    feedback.className = 'form-feedback error';
+    return;
+  }
+
   if (!isSlotAvailable(date, barber.id, time, service, appointment.id)) {
-    feedback.textContent = 'Este horário ficou ocupado ou não comporta a duração do serviço. Escolha outro horário.';
+    feedback.textContent = 'Este horario ficou ocupado ou nao comporta a duracao do servico. Escolha outro horario.';
     feedback.className = 'form-feedback error';
     updateRescheduleTimes();
     return;
   }
-  const updated = setAppointment(appointment.id, { barberId: barber.id, barberName: barber.name, date, time, status: 'pendente' }, historyEntry('client_rescheduled', {
-    from: { barberId: appointment.barberId, date: appointment.date, time: appointment.time },
-    to: { barberId: barber.id, date, time }
-  }));
-  feedback.textContent = 'Agendamento reagendado com sucesso.';
-  feedback.className = 'form-feedback ok';
-  renderManageResult(updated);
+
+  const phone = onlyDigits(byId('manage-phone').value);
+  const code = normalizeCode(byId('manage-code').value);
+  const nextAppointment = {
+    barberId: barber.id,
+    barberName: barber.name,
+    date,
+    time,
+    slotIds: appointmentSlotIds({ ...appointment, barberId: barber.id, date, time }, service)
+  };
+
+  feedback.textContent = 'Salvando reagendamento...';
+  feedback.className = 'form-feedback';
+  try {
+    const updated = await rescheduleFirebaseAppointment(appointment, phone, code, nextAppointment);
+    updateCachedSlotsForAppointment(appointment, 'delete');
+    updateCachedSlotsForAppointment(updated);
+    rememberAppointment(updated);
+    feedback.textContent = 'Agendamento reagendado com sucesso.';
+    feedback.className = 'form-feedback ok';
+    renderManageResult(updated);
+  } catch (err) {
+    console.error('Falha ao reagendar no Firestore.', err);
+    feedback.textContent = isSlotTakenError(err)
+      ? 'Este horario acabou de ser reservado por outro cliente. Escolha outro horario.'
+      : 'Nao foi possivel reagendar agora. Tente novamente em alguns instantes.';
+    feedback.className = 'form-feedback error';
+    updateRescheduleTimes();
+  }
 }
 
 function renderBusiness() {
+  const instagramConfigured = business.instagram && business.instagram !== '#';
+  const reviewsConfigured = business.googleReviewsUrl && business.googleReviewsUrl !== '#';
   byId('business-name').textContent = business.name;
   byId('business-address').textContent = business.address;
   byId('business-hours').textContent = business.hoursText;
-  byId('business-phone').textContent = formatPhone(business.whatsapp);
-  byId('business-instagram').textContent = business.instagram.replace('https://www.instagram.com/', '@').replace(/\/$/, '');
-  byId('business-instagram').href = business.instagram;
-  byId('business-map').src = business.mapEmbed;
-  byId('floating-whatsapp').href = whatsappLink(business.whatsapp, `Olá, quero agendar um horário na ${business.name}.`);
-  byId('google-reviews').href = business.googleReviewsUrl;
-  byId('google-review').href = business.googleReviewsUrl;
+  byId('business-phone').textContent = business.whatsapp ? formatPhone(business.whatsapp) : business.phoneDisplay;
+  byId('business-instagram').textContent = instagramConfigured
+    ? business.instagram.replace('https://www.instagram.com/', '@').replace(/\/$/, '')
+    : 'Instagram a configurar';
+  byId('business-instagram').href = instagramConfigured ? business.instagram : '#';
+  byId('business-map').src = business.mapEmbed || 'about:blank';
+  byId('floating-whatsapp').href = whatsappLink(business.whatsapp, `Ola, quero agendar um horario na ${business.name}.`);
+  byId('google-reviews').href = reviewsConfigured ? business.googleReviewsUrl : '#';
+  byId('google-review').href = reviewsConfigured ? business.googleReviewsUrl : '#';
 }
 
 function maskPhoneInput(event) {
@@ -1162,7 +1382,6 @@ function initReveal() {
 }
 
 async function init() {
-  await refreshAppointmentsFromFirebase();
   setHeroMedia();
   renderServices();
   renderBarbers();
@@ -1173,7 +1392,7 @@ async function init() {
   renderMiniCalendar();
   renderTimeGroups();
   updateScheduleSummary();
-  updateTimes();
+  await updateTimes();
   updateBookingVisibility();
   goToStep(0);
   updateRescheduleTimes();

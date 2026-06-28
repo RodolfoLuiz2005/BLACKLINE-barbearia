@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
@@ -97,13 +97,13 @@ const defaultDb = {
     }
   ],
   configuracoes: {
-    instagram: 'https://www.instagram.com/blacklinebarber',
-    facebook: 'https://www.facebook.com/blacklinebarber',
-    tiktok: 'https://www.tiktok.com/@blacklinebarber',
-    whatsapp: '5581999999999',
-    endereco: 'Av. Boa Viagem, Recife - PE',
-    mapaEmbed: 'https://www.google.com/maps?q=Av.%20Boa%20Viagem%2C%20Recife%20-%20PE&output=embed',
-    googleReviewsUrl: 'https://www.google.com/search?q=BLACKLINE+Barber+Recife+avaliacoes',
+    instagram: '#',
+    facebook: '#',
+    tiktok: '#',
+    whatsapp: '',
+    endereco: 'Endereco comercial a configurar',
+    mapaEmbed: 'about:blank',
+    googleReviewsUrl: '#',
     googleRating: 'Configure no painel',
     horarioTexto: 'Segunda a Sabado - 08h as 18h (Sabado ate 12h)',
     planos: [
@@ -373,6 +373,14 @@ app.get('/api/configuracoes', (req, res) => {
   res.json({ success: true, data: db.configuracoes });
 });
 
+function legacyAppointmentsDisabled(req, res) {
+  return res.status(410).json({
+    success: false,
+    error: 'API publica legada de agendamentos desativada. Use o fluxo seguro com Firebase/Firestore.'
+  });
+}
+
+app.use('/api/agendamentos', legacyAppointmentsDisabled);
 app.get('/api/horarios-disponiveis', (req, res) => {
   const { data } = req.query;
   let { profissionalId } = req.query;
