@@ -311,26 +311,28 @@
     </section>
 
     <section class="section manage-section" id="gerenciar">
-      <div class="section-heading">
-        <p class="eyebrow">Meu horário</p>
-        <h2>Consulte ou ajuste seu agendamento.</h2>
-        <p>Use seu WhatsApp e o código recebido para conferir status, remarcar ou cancelar.</p>
-      </div>
-      <div class="manage-layout">
-        <form class="manage-card" id="manage-form" novalidate>
-          <div class="form-grid">
-            <label>
-              WhatsApp *
-              <input id="manage-phone" type="tel" inputmode="numeric" autocomplete="tel" />
-            </label>
-            <label>
-              Código *
-              <input id="manage-code" type="text" />
-            </label>
-          </div>
-          <div class="form-feedback" id="manage-feedback" role="alert"></div>
-          <button class="btn btn-primary btn-submit" type="submit">Consultar agendamento</button>
-        </form>
+      <div class="flex">
+        <div class="section-heading">
+          <p class="eyebrow">Meu horário</p>
+          <h2>Consulte ou ajuste seu agendamento.</h2>
+          <p>Use seu WhatsApp e o código recebido para conferir status, remarcar ou cancelar.</p>
+        </div>
+        <div class="manage-layout">
+          <form class="manage-card" id="manage-form" novalidate>
+            <div class="form-grid">
+              <label>
+                WhatsApp *
+                <input id="manage-phone" type="tel" inputmode="numeric" autocomplete="tel" />
+              </label>
+              <label>
+                Código *
+                <input id="manage-code" type="text" />
+              </label>
+            </div>
+            <div class="form-feedback" id="manage-feedback" role="alert"></div>
+            <button class="btn btn-primary btn-submit" type="submit">Consultar agendamento</button>
+          </form>
+      </div><!-- flex -->
 
         <article class="manage-result" id="manage-result" hidden>
           <div id="manage-details"></div>
