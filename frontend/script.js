@@ -90,8 +90,9 @@ function formatDate(value) {
 
 function whatsappLink(phone, message) {
   const cleanPhone = onlyDigits(phone);
-  if (!cleanPhone) return '#';
-  return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+  const encodedMessage = encodeURIComponent(message || '');
+  if (!cleanPhone) return `https://wa.me/?text=${encodedMessage}`;
+  return `https://wa.me/${cleanPhone}?text=${encodedMessage}`;
 }
 function isValidBrazilianWhatsapp(value) {
   const digits = onlyDigits(value);
@@ -522,27 +523,39 @@ function barberOptions(selected = '') {
 }
 
 function renderBookingServiceCards() {
-  const container = byId('booking-service-options');
+  const container = document.querySelector('#booking-service-options.booking-service-options');
+
   if (!container) {
-    const fallback = document.createElement('div');
-    fallback.id = 'booking-service-options';
-    fallback.className = 'booking-service-options';
-    const form = byId('booking-form');
-    const target = form?.querySelector('.booking-slide[data-booking-step="0"]');
-    if (target) target.appendChild(fallback);
-    else if (form) form.appendChild(fallback);
-    else return;
+    console.error('Container visual #booking-service-options nao encontrado.');
+    return;
   }
 
-  const targetContainer = byId('booking-service-options');
-  if (!targetContainer) return;
+  try {
+    if (!Array.isArray(services) || services.length === 0) {
+      throw new Error('BLACKLINE_CONFIG.services vazio ou invalido.');
+    }
 
-  targetContainer.innerHTML = services.map(service => '<button class="booking-option service-option" type="button" data-booking-service="' + escapeHtml(service.id) + '">'
-    + '<strong>' + escapeHtml(service.name) + '</strong>'
-    + '<span>' + escapeHtml(service.duration) + ' &bull; ' + money(service.price) + '</span>'
-    + '</button>').join('');
+    container.innerHTML = services.map(service => `
+      <button
+        class="booking-option service-option"
+        type="button"
+        data-booking-service="${escapeHtml(service.id)}"
+      >
+        <strong>${escapeHtml(service.name)}</strong>
+        <span>${escapeHtml(service.duration)} &bull; ${money(service.price)}</span>
+        <p>${escapeHtml(service.description || '')}</p>
+      </button>
+    `).join('');
+  } catch (err) {
+    console.error('Nao foi possivel carregar os servicos do agendamento.', err);
+    container.innerHTML = `
+      <div class="booking-load-error" role="alert">
+        <p>Nao foi possivel carregar os servicos, tente novamente.</p>
+        <button class="btn btn-secondary" type="button" data-retry-services>Tentar novamente</button>
+      </div>
+    `;
+  }
 }
-
 function renderBookingBarberCards() {
   byId('booking-barber-options').innerHTML = barbers.map(barber => '<button class="booking-option barber-option" type="button" data-booking-barber="' + escapeHtml(barber.id) + '">'
     + '<img src="' + escapeHtml(barber.photo || assets.barberFallback) + '" alt="' + escapeHtml(barber.name) + '" loading="lazy" onerror="this.src=\'' + escapeHtml(assets.barberFallback) + '\'">'
@@ -1024,6 +1037,13 @@ function updateSelectedCards() {
 }
 
 async function selectService(id) {
+  if (!services.some(item => item.id === id)) {
+    console.error('Servico selecionado nao encontrado na configuracao.', { id });
+    renderBookingServiceCards();
+    showScheduleToast('Nao foi possivel carregar os servicos, tente novamente.', 'error');
+    goToStep(0);
+    return;
+  }
   const changed = byId('booking-service').value !== id;
   byId('booking-service').value = id;
   if (changed) clearSelectedDateTime();
@@ -1433,9 +1453,9 @@ async function submitReschedule(event) {
     updateCachedSlotsForAppointment(appointment, 'delete');
     updateCachedSlotsForAppointment(updated);
     rememberAppointment(updated);
-    feedback.textContent = 'Agendamento reagendado com sucesso.';
-    feedback.className = 'form-feedback ok';
     renderManageResult(updated);
+    byId('manage-feedback').textContent = 'Agendamento reagendado com sucesso.';
+    byId('manage-feedback').className = 'form-feedback ok';
   } catch (err) {
     console.error('Falha ao reagendar no Firestore.', err);
     feedback.textContent = isSlotTakenError(err)
@@ -1495,7 +1515,14 @@ function attachEvents() {
     const serviceButton = event.target.closest('[data-service]');
     const barberButton = event.target.closest('[data-barber]');
     const bookingServiceButton = event.target.closest('[data-booking-service]');
+    const retryServicesButton = event.target.closest('[data-retry-services]');
     const bookingBarberButton = event.target.closest('[data-booking-barber]');
+    if (retryServicesButton) {
+      renderBookingServiceCards();
+      updateSelectedCards();
+      updateSliderHeight();
+      return;
+    }
     if (serviceButton) selectService(serviceButton.dataset.service);
     if (barberButton) selectBarber(barberButton.dataset.barber);
     if (bookingServiceButton) selectService(bookingServiceButton.dataset.bookingService);
@@ -1563,21 +1590,26 @@ function initReveal() {
 
 async function init() {
   setHeroMedia();
+
   renderServices();
   renderBarbers();
   renderTestimonials();
   renderSelects();
   renderBusiness();
+
   setMinDate();
   renderMiniCalendar();
   renderTimeGroups();
   updateScheduleSummary();
-  await updateTimes();
+  updateTimes();
   updateBookingVisibility();
   goToStep(0);
   updateRescheduleTimes();
+
   attachEvents();
   initReveal();
+
+
 }
 
 init();

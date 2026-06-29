@@ -802,6 +802,25 @@ input:focus, select:focus, textarea:focus { border-color: var(--gold); box-shado
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 12px;
 }
+.booking-load-error {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 12px;
+  align-items: start;
+  padding: 18px;
+  border: 1px solid rgba(229,83,83,.45);
+  border-radius: 8px;
+  background: rgba(229,83,83,.08);
+  color: var(--text);
+}
+.booking-load-error p {
+  margin: 0;
+  color: var(--red);
+  line-height: 1.45;
+}
+.booking-load-error .btn {
+  justify-self: start;
+}
 .booking-option {
   min-height: 148px;
   padding: 18px;
