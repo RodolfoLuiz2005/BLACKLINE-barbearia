@@ -31,6 +31,9 @@ let lastFocusedElementBeforeSuccess = null;
 let heroMediaQueryList = null;
 let heroMediaFallbackTimer = 0;
 let currentStep = 0;
+let bookingSliderResizeObserver = null;
+let bookingSliderObservedSlide = null;
+let bookingSliderHeightFrame = 0;
 const BOOKING_STEP_COUNT = 6;
 const TIME_PERIODS = [
   { label: 'Manhã', slots: ['09:00', '09:30', '10:00', '10:30', '11:00'] },
@@ -822,11 +825,39 @@ function canAccessStep(step) {
   return false;
 }
 
-function updateSliderHeight() {
+function syncSliderHeight(slide = document.querySelector('[data-booking-step].is-active')) {
   const viewport = byId('booking-slider-viewport');
+  if (!viewport || !slide) return;
+
+  if (bookingSliderHeightFrame) cancelAnimationFrame(bookingSliderHeightFrame);
+  bookingSliderHeightFrame = window.requestAnimationFrame(() => {
+    bookingSliderHeightFrame = 0;
+    const height = Math.ceil(slide.getBoundingClientRect().height);
+    if (height > 0) viewport.style.height = height + 'px';
+  });
+}
+
+function observeActiveSliderSlide() {
   const activeSlide = document.querySelector('[data-booking-step].is-active');
-  if (!viewport || !activeSlide) return;
-  viewport.style.height = activeSlide.offsetHeight + 'px';
+  if (!activeSlide) return;
+
+  if ('ResizeObserver' in window && !bookingSliderResizeObserver) {
+    bookingSliderResizeObserver = new ResizeObserver(entries => {
+      if (entries.some(entry => entry.target === bookingSliderObservedSlide)) {
+        syncSliderHeight(bookingSliderObservedSlide);
+      }
+    });
+  }
+
+  if (bookingSliderObservedSlide !== activeSlide) {
+    if (bookingSliderResizeObserver && bookingSliderObservedSlide) {
+      bookingSliderResizeObserver.unobserve(bookingSliderObservedSlide);
+    }
+    bookingSliderObservedSlide = activeSlide;
+    if (bookingSliderResizeObserver) bookingSliderResizeObserver.observe(activeSlide);
+  }
+
+  syncSliderHeight(activeSlide);
 }
 
 function goToStep(step) {
@@ -849,7 +880,7 @@ function goToStep(step) {
   updateSteps();
   updateBookingVisibility();
   updateScheduleSummary();
-  window.requestAnimationFrame(updateSliderHeight);
+  observeActiveSliderSlide();
 }
 function nextStep() {
   goToStep(currentStep + 1);
@@ -1498,7 +1529,7 @@ function attachEvents() {
   });
   window.addEventListener('scroll', () => byId('site-header').classList.toggle('scrolled', window.scrollY > 24));
   window.addEventListener('resize', () => {
-    updateSliderHeight();
+    if (!('ResizeObserver' in window)) syncSliderHeight();
     if (window.innerWidth > 720) closeMobileMenu();
   });
   document.addEventListener('keydown', event => {
@@ -1520,7 +1551,6 @@ function attachEvents() {
     if (retryServicesButton) {
       renderBookingServiceCards();
       updateSelectedCards();
-      updateSliderHeight();
       return;
     }
     if (serviceButton) selectService(serviceButton.dataset.service);
