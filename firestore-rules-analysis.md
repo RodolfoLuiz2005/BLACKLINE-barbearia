@@ -27,7 +27,7 @@ Edition detected by Firebase CLI: STANDARD / FIRESTORE_NATIVE / location `nam5`
 - Public users cannot list lookup or slot collections.
 - Public create/update requires strict schema validation, allowed status transitions, bounded strings, bounded price/duration and deterministic slot IDs.
 - Duplicate bookings are blocked by deterministic slot document IDs and Firestore transaction retries.
-- Admin authorization is based on custom claim `admin`, configured UID, or verified owner email.
+- Admin authorization is based on custom claim `admin` or a configured UID fallback.
 
 ## Devil's advocate checks
 
@@ -57,8 +57,8 @@ Edition detected by Firebase CLI: STANDARD / FIRESTORE_NATIVE / location `nam5`
     {
       "check": "Authority Source",
       "severity": "minor",
-      "issue": "Admin authority does not rely on user-created Firestore data; it uses Auth token/UID/email.",
-      "recommendation": "Prefer custom claims for production admin management."
+      "issue": "Admin authority does not rely on user-created Firestore data; it uses the Auth token custom claim with a configured UID fallback.",
+      "recommendation": "Prefer the `admin` custom claim for production admin management and retire the UID fallback once bootstrapping is complete."
     }
   ]
 }

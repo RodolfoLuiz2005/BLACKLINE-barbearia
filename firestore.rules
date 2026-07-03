@@ -43,18 +43,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isVerifiedOwnerEmail() {
-      return isAuthenticated()
-        && request.auth.token.email == 'rodolfoluiz09082020@gmail.com'
-        && request.auth.token.email_verified == true;
-    }
 
     function isAdmin() {
       return isAuthenticated()
         && (
           request.auth.uid == 'HLaZh9fIaPWjIkHgV9koGGyrEJx2'
           || request.auth.token.admin == true
-          || isVerifiedOwnerEmail()
         );
     }
 

@@ -67,13 +67,18 @@ Publicar quando estiver pronto:
 npx -y firebase-tools@latest deploy --only firestore:rules --project blackline-93c09
 ```
 
-As regras foram desenhadas para manter `agendamentos` privado, permitir criacao publica apenas em transacao com lookup e slots, bloquear update/delete publico direto e restringir o painel ao admin autorizado em `firestore.rules` e `frontend/blackline-config.js`.
+As regras foram desenhadas para manter `agendamentos` privado, permitir criacao publica apenas em transacao com lookup e slots, bloquear update/delete publico direto e restringir o painel ao admin autorizado por custom claim `admin` ou UID explicitamente configurado em `firestore.rules`.
 
 ## Admin
 
-Ative no Firebase Authentication os provedores usados e configure o UID/e-mail admin em:
+Ative no Firebase Authentication os provedores usados. Para producao, prefira autorizar administradores com custom claim do Firebase Auth:
 
-- `firestore.rules`
-- `frontend/blackline-config.js`
+```bash
+GOOGLE_APPLICATION_CREDENTIALS=/caminho/para/service-account.json ADMIN_UID=<firebase-auth-uid> npm run set:admin-claim
+```
+
+Alternativamente, use `FIREBASE_SERVICE_ACCOUNT_PATH` ou `FIREBASE_SERVICE_ACCOUNT_KEY` com o JSON da service account. Depois de aplicar a claim, o usuario precisa sair e entrar novamente para receber um ID token atualizado.
+
+O fallback por UID ainda existe em `firestore.rules` para compatibilidade com a configuracao atual. Nao use e-mail pessoal como fonte de autorizacao em regras publicas.
 
 Usuario autenticado sem permissao administrativa nao deve ver o painel nem carregar dados.
