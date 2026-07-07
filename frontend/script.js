@@ -408,8 +408,18 @@ function registerManageFailure() {
   return nextState;
 }
 
-function setHeroFallbackState(active) {
-  document.body.classList.toggle('hero-video-failed', Boolean(active));
+function getHeroElement() {
+  return byId('inicio') || document.querySelector('.hero');
+}
+
+function setHeroVideoState(hero, state) {
+  if (!hero) return;
+  hero.classList.toggle('hero-video-ready', state === 'ready');
+  hero.classList.toggle('hero-video-failed', state === 'failed');
+}
+
+function getHeroVideoSource(source) {
+  return source?.dataset.src || source?.getAttribute('src') || assets.heroVideo || '';
 }
 
 function shouldUseHeroImageOnly() {
@@ -432,36 +442,36 @@ function bindHeroMediaQuery() {
 }
 
 function setHeroMedia() {
+  const hero = getHeroElement();
   const video = byId('hero-video');
   const source = byId('hero-video-source');
   const fallback = byId('hero-fallback');
-  const fallbackImage = assets.heroFallback || business.ogImage || '/og-image.jpg';
+  const fallbackImage = video?.getAttribute('poster') || assets.heroFallback || business.ogImage || 'video_header.jpg';
+  const videoSource = getHeroVideoSource(source);
 
   bindHeroMediaQuery();
   window.clearTimeout(heroMediaFallbackTimer);
 
   if (fallback) fallback.style.backgroundImage = 'url("' + fallbackImage + '")';
   if (video) video.poster = fallbackImage;
+  if (source && videoSource) source.dataset.src = videoSource;
 
   const showFallback = () => {
     window.clearTimeout(heroMediaFallbackTimer);
-    document.body.classList.remove('hero-video-ready');
-    setHeroFallbackState(true);
+    setHeroVideoState(hero, 'failed');
     clearHeroVideo(video, source);
   };
 
-  if (!video || !source || !assets.heroVideo || shouldUseHeroImageOnly()) {
+  if (!video || !source || !videoSource || shouldUseHeroImageOnly()) {
     showFallback();
     return;
   }
 
-  document.body.classList.remove('hero-video-ready');
-  setHeroFallbackState(false);
+  setHeroVideoState(hero, 'loading');
 
   const markReady = () => {
     window.clearTimeout(heroMediaFallbackTimer);
-    setHeroFallbackState(false);
-    document.body.classList.add('hero-video-ready');
+    setHeroVideoState(hero, 'ready');
   };
 
   video.addEventListener('loadeddata', markReady, { once: true });
@@ -469,9 +479,10 @@ function setHeroMedia() {
   video.addEventListener('error', showFallback, { once: true });
   source.addEventListener('error', showFallback, { once: true });
 
-  source.src = assets.heroVideo;
+  source.src = videoSource;
   video.load();
   heroMediaFallbackTimer = window.setTimeout(showFallback, HERO_VIDEO_TIMEOUT_MS);
+  if (video.readyState >= (video.HAVE_CURRENT_DATA || 2)) markReady();
   const playback = video.play?.();
   if (playback?.catch) playback.catch(showFallback);
 }
@@ -1642,4 +1653,12 @@ async function init() {
 
 }
 
-init();
+function startApp() {
+  void init();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp, { once: true });
+} else {
+  startApp();
+}
