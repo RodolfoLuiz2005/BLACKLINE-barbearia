@@ -2325,9 +2325,9 @@ textarea:focus {
 @media (max-width: 720px),
   (prefers-reduced-motion: reduce),
   (prefers-reduced-data: reduce) {
-  .hero-video {
+ /*  .hero-video {
     display: none;
-  }
+  } */
   .hero-fallback {
     opacity: 1;
   }
