@@ -2322,17 +2322,15 @@ textarea:focus {
   }
 }
 
-@media (max-width: 720px),
-  (prefers-reduced-motion: reduce),
-  (prefers-reduced-data: reduce) {
- /*  .hero-video {
+@media (max-width: 720px) and (prefers-reduced-motion: reduce),
+  (max-width: 720px) and (prefers-reduced-data: reduce) {
+  .hero-video {
     display: none;
-  } */
+  }
   .hero-fallback {
     opacity: 1;
   }
 }
-
 /* Booking section layout stability */
 .booking-section {
   --booking-section-max: 1280px;
